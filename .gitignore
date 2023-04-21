@@ -1,0 +1,7 @@
+demo/results/
+demo/*.pkl
+
+# Ignore the cache directory
+.metals/
+.vscode/
+*__pycache__/
