@@ -4,4 +4,4 @@ demo/*.pkls
 # Ignore the cache directory
 .metals/
 .vscode/
-# *__pycache__/
+*__pycache__/
