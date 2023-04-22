@@ -1,5 +1,5 @@
-# demo/results/
-demo/*.pkl
+demo/results/
+demo/*.pkls
 
 # Ignore the cache directory
 .metals/
