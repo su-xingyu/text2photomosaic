@@ -1,4 +1,4 @@
-demo/results/
+# demo/results/
 demo/*.pkl
 
 # Ignore the cache directory
