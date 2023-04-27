@@ -136,13 +136,110 @@ optimizer_color = torch.optim.Adam(
 )
 
 # Run Adam iterations.
-num_interations = 1000
+num_interations = 5
 scheduler_delta = StepLR(optimizer_delta, step_size=num_interations // 3, gamma=0.5)
 scheduler_angle = StepLR(optimizer_angle, step_size=num_interations // 3, gamma=0.5)
 scheduler_translation = StepLR(
     optimizer_translation, step_size=num_interations // 3, gamma=0.5
 )
 scheduler_color = StepLR(optimizer_color, step_size=num_interations // 3, gamma=0.5)
+
+def calc_loss(shapes, shape_groups):
+    scene_args = pydiffvg.RenderFunction.serialize_scene(
+        canvas_width, canvas_height, shapes, shape_groups
+    )
+    img = render(
+        canvas_width,  # width
+        canvas_height,  # height
+        2,  # num_samples_x
+        2,  # num_samples_y
+        t + 1,  # seed
+        None,  # background_image
+        *scene_args
+    )
+    # Transform image for CLIP input
+    img = img[:, :, 3:4] * img[:, :, :3] + torch.ones(
+        img.shape[0], img.shape[1], 3, device=pydiffvg.get_device()
+    ) * (1 - img[:, :, 3:4])
+    img = img[:, :, :3]
+    img = img.unsqueeze(0)
+    img = img.permute(0, 3, 1, 2)  # NHWC -> NCHW
+
+    # Compute the loss
+    pos_clip_loss = 0
+    neg_clip_loss = 0
+    NUM_AUGS = 4
+    img_augs = []
+    for n in range(NUM_AUGS):
+        img_augs.append(augment_trans(img))
+    img_batch = torch.cat(img_augs)
+    image_features = model.encode_image(img_batch)
+    for n in range(NUM_AUGS):
+        pos_clip_loss -= torch.cosine_similarity(
+            text_features, image_features[n : n + 1], dim=1
+        )
+        if use_neg:
+            neg_clip_loss += (
+                torch.cosine_similarity(
+                    text_features_neg, image_features[n : n + 1], dim=1
+                )
+                * neg_clip_coe
+            )
+
+    # Regularization term
+    diffvg_regularization_loss = diffvg_regularization_term(
+        shapes,
+        shape_groups,
+        coe_delta=coe_delta,
+        coe_displacement=coe_displacement,
+        coe_angle=coe_angle,
+    )
+    pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
+        shapes, shape_groups, coe_distance=coe_distance
+    )
+    image_regularization_loss = image_regularization_term(img, coe_image=coe_image)
+    loss = (
+        pos_clip_loss
+        + neg_clip_loss
+        + diffvg_regularization_loss
+        + pairwise_diffvg_regularization_loss
+        + image_regularization_loss
+    )
+    return loss
+
+def render_scene(shapes, shape_groups):
+    scene_args = pydiffvg.RenderFunction.serialize_scene(
+        canvas_width, canvas_height, shapes, shape_groups
+    )
+    img = render(
+        canvas_width,  # width
+        canvas_height,  # height
+        2,  # num_samples_x
+        2,  # num_samples_y
+        t + 1,  # seed
+        None,  # background_image
+        *scene_args
+    )
+    pydiffvg.imwrite(
+        img.cpu(), "results/postprocess/output.png", gamma=gamma
+    )
+
+def rec2x(ori_shapes, ori_shape_groups):
+    origin_loss = calc_loss(ori_shapes, ori_shape_groups)
+    print("Origin loss = ", origin_loss)
+    for (id, (rect, rect_group)) in enumerate(zip(ori_shapes, ori_shape_groups)):
+        # shapes = ori_shapes.copy().remove(rect)
+        # shape_groups = ori_shape_groups.copy().remove(rect_group)
+        ori_shapes[id].size *= 2
+        cur_loss = calc_loss(ori_shapes, ori_shape_groups)
+        print("cur loss = ", cur_loss)
+        if (cur_loss < origin_loss):
+            print("update")
+            origin_loss = cur_loss
+        else:
+            ori_shapes[id].size /= 2
+    render_scene(ori_shapes, ori_shape_groups)
+
 
 for t in range(num_interations):
     print("iteration:", t)
@@ -250,6 +347,7 @@ for t in range(num_interations):
     scheduler_angle.step()
     scheduler_translation.step()
 
+rec2x(shapes, shape_groups)
 
 # Render the final result.
 scene_args = pydiffvg.RenderFunction.serialize_scene(
