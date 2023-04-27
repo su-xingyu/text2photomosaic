@@ -153,7 +153,7 @@ def calc_loss(shapes, shape_groups):
         canvas_height,  # height
         2,  # num_samples_x
         2,  # num_samples_y
-        t + 1,  # seed
+        num_interations , # seed
         None,  # background_image
         *scene_args
     )
@@ -207,7 +207,7 @@ def calc_loss(shapes, shape_groups):
     )
     return loss
 
-def render_scene(shapes, shape_groups):
+def render_scene(name, shapes, shape_groups):
     scene_args = pydiffvg.RenderFunction.serialize_scene(
         canvas_width, canvas_height, shapes, shape_groups
     )
@@ -216,21 +216,31 @@ def render_scene(shapes, shape_groups):
         canvas_height,  # height
         2,  # num_samples_x
         2,  # num_samples_y
-        t + 1,  # seed
+        num_interations ,  # seed
         None,  # background_image
         *scene_args
     )
     pydiffvg.imwrite(
-        img.cpu(), "results/postprocess/output.png", gamma=gamma
+        img.cpu(), "results/postprocess/output-{}.png".format(name), gamma=gamma
     )
 
 def rec2x(ori_shapes, ori_shape_groups):
+    render_scene("before", ori_shapes, ori_shape_groups)
     origin_loss = calc_loss(ori_shapes, ori_shape_groups)
     print("Origin loss = ", origin_loss)
+
+    # ori_shapes[0].delta = ori_shapes[0].size
+    # ori_shapes[0].update()
+
+    # render_scene("after", ori_shapes[:-1], ori_shape_groups[:-1])
+    # render_scene("after2", ori_shapes, ori_shape_groups)
+    # return
+
     for (id, (rect, rect_group)) in enumerate(zip(ori_shapes, ori_shape_groups)):
         # shapes = ori_shapes.copy().remove(rect)
         # shape_groups = ori_shape_groups.copy().remove(rect_group)
-        ori_shapes[id].size *= 2
+        ori_shapes[id].delta = torch.tensor([5, 5])
+        ori_shapes[id].update()
         cur_loss = calc_loss(ori_shapes, ori_shape_groups)
         print("cur loss = ", cur_loss)
         if (cur_loss < origin_loss):
@@ -238,8 +248,10 @@ def rec2x(ori_shapes, ori_shape_groups):
             origin_loss = cur_loss
         else:
             ori_shapes[id].size /= 2
-    render_scene(ori_shapes, ori_shape_groups)
+    render_scene("after", ori_shapes, ori_shape_groups)
 
+# rec2x(shapes, shape_groups)
+# quit()
 
 for t in range(num_interations):
     print("iteration:", t)
