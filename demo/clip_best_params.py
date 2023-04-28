@@ -247,7 +247,8 @@ def rec2x(ori_shapes, ori_shape_groups):
             print("update")
             origin_loss = cur_loss
         else:
-            ori_shapes[id].size /= 2
+            ori_shapes[id].delta = torch.tensor([-5, -5])
+            ori_shapes[id].update()
     render_scene("after", ori_shapes, ori_shape_groups)
 
 # rec2x(shapes, shape_groups)
