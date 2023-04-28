@@ -136,7 +136,7 @@ optimizer_color = torch.optim.Adam(
 )
 
 # Run Adam iterations.
-num_interations = 5
+num_interations = 50
 scheduler_delta = StepLR(optimizer_delta, step_size=num_interations // 3, gamma=0.5)
 scheduler_angle = StepLR(optimizer_angle, step_size=num_interations // 3, gamma=0.5)
 scheduler_translation = StepLR(
@@ -229,30 +229,61 @@ def rec2x(ori_shapes, ori_shape_groups):
     origin_loss = calc_loss(ori_shapes, ori_shape_groups)
     print("Origin loss = ", origin_loss)
 
-    # ori_shapes[0].delta = ori_shapes[0].size
-    # ori_shapes[0].update()
-
     # render_scene("after", ori_shapes[:-1], ori_shape_groups[:-1])
     # render_scene("after2", ori_shapes, ori_shape_groups)
     # return
 
     for (id, (rect, rect_group)) in enumerate(zip(ori_shapes, ori_shape_groups)):
-        # shapes = ori_shapes.copy().remove(rect)
-        # shape_groups = ori_shape_groups.copy().remove(rect_group)
-        ori_shapes[id].delta = torch.tensor([5, 5])
-        ori_shapes[id].update()
+
+        with torch.no_grad():
+            ori_shapes[id].delta += torch.tensor([5, 5])
+            ori_shapes[id].update()
         cur_loss = calc_loss(ori_shapes, ori_shape_groups)
         print("cur loss = ", cur_loss)
         if (cur_loss < origin_loss):
             print("update")
-            origin_loss = cur_loss
+            # origin_loss = cur_loss
         else:
-            ori_shapes[id].delta = torch.tensor([-5, -5])
-            ori_shapes[id].update()
+            with torch.no_grad():
+                ori_shapes[id].delta += torch.tensor([-5, -5])
+                ori_shapes[id].update()
     render_scene("after", ori_shapes, ori_shape_groups)
 
+def recdel(ori_shapes, ori_shape_groups):
+    origin_loss = calc_loss(ori_shapes, ori_shape_groups)
+    print("Origin loss = ", origin_loss)
+
+    loss_contrib = []
+
+    for (id, (rect, rect_group)) in enumerate(zip(ori_shapes, ori_shape_groups)):
+        shapes = ori_shapes.copy()
+        shapes.remove(rect)
+        # print(shapes)
+        # print(type(shapes))
+        shape_groups = ori_shape_groups.copy()
+        shape_groups.remove(rect_group)
+        
+        for id_ in range(id, len(shapes)):
+            # print(shapes[id_].id)
+            # print(shape_groups[id_].id)
+            # print(type(shapes[id_].id))
+            # shapes[id_].id = str(int(shapes[id_].id)-1)
+            # print("shapes_groupsID: ", shape_groups[id_].shape_ids)
+            # print(torch.tensor([int(shape_groups[id_].shape_ids[0]) - 1]))
+            shape_groups[id_].shape_ids = torch.tensor([int(shape_groups[id_].shape_ids[0])-1])
+
+        print("calculating loss...")
+        cur_loss = calc_loss(shapes, shape_groups)
+        print("cur loss = ", cur_loss)
+        loss_contrib.append((id, - cur_loss + origin_loss))
+
+    print(loss_contrib)
+
+
+
 # rec2x(shapes, shape_groups)
-# quit()
+recdel(shapes, shape_groups)
+quit()
 
 for t in range(num_interations):
     print("iteration:", t)
