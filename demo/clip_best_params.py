@@ -144,7 +144,7 @@ scheduler_translation = StepLR(
 )
 scheduler_color = StepLR(optimizer_color, step_size=num_interations // 3, gamma=0.5)
 
-def calc_loss(shapes, shape_groups):
+def calc_loss(shapes, shape_groups, with_reg=False):
     scene_args = pydiffvg.RenderFunction.serialize_scene(
         canvas_width, canvas_height, shapes, shape_groups
     )
@@ -185,26 +185,34 @@ def calc_loss(shapes, shape_groups):
                 )
                 * neg_clip_coe
             )
-
-    # Regularization term
-    diffvg_regularization_loss = diffvg_regularization_term(
-        shapes,
-        shape_groups,
-        coe_delta=coe_delta,
-        coe_displacement=coe_displacement,
-        coe_angle=coe_angle,
-    )
-    pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
-        shapes, shape_groups, coe_distance=coe_distance
-    )
-    image_regularization_loss = image_regularization_term(img, coe_image=coe_image)
-    loss = (
-        pos_clip_loss
-        + neg_clip_loss
-        + diffvg_regularization_loss
-        + pairwise_diffvg_regularization_loss
-        + image_regularization_loss
-    )
+    
+    if with_reg:
+        # Regularization term
+        diffvg_regularization_loss = diffvg_regularization_term(
+            shapes,
+            shape_groups,
+            coe_delta=coe_delta,
+            coe_displacement=coe_displacement,
+            coe_angle=coe_angle,
+        )
+        pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
+            shapes, shape_groups, coe_distance=coe_distance
+        )
+        image_regularization_loss = image_regularization_term(img, coe_image=coe_image)
+        loss = (
+            pos_clip_loss
+            + neg_clip_loss
+            + diffvg_regularization_loss
+            + pairwise_diffvg_regularization_loss
+            + image_regularization_loss
+        )
+    else:
+        # without regularization
+        loss = (
+            pos_clip_loss
+            + neg_clip_loss
+        )
+        
     return loss
 
 def render_scene(name, shapes, shape_groups):
