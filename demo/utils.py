@@ -35,7 +35,11 @@ def diffvg_regularization_term(
 
 
 def pairwise_diffvg_regularization_term(
-    shapes, shape_groups, coe_distance=torch.tensor(1.0)
+    shapes,
+    shape_groups,
+    coe_overlap=torch.tensor(1.0),
+    num_neighbor=1,
+    coe_neighbor=torch.tensor(1.0),
 ):
     centers_transformed = torch.stack(
         [
@@ -76,15 +80,27 @@ def pairwise_diffvg_regularization_term(
     normalization_term = torch.tensor(
         [torch.mean(shape.size) for shape in shapes]
     ).unsqueeze(-1)
-    # Use L2 regularization
-    regularization_term = torch.sum(
-        coe_distance
-        * (
+
+    regularization_term = 0
+
+    # overlap regularization term
+    regularization_term += coe_overlap * torch.sum(
+        (
             torch.nn.functional.relu(pairwise_sum_sides - pairwise_distance)
             / normalization_term
         )
         ** 2
     )
+
+    # neighbor regularization term (neighbors not too far apart)
+    neighbor_distance, _ = torch.topk(
+        torch.nn.functional.relu(2 * pairwise_distance - pairwise_sum_sides)
+        / normalization_term,
+        k=num_neighbor,
+        dim=-1,
+        largest=False,
+    )
+    regularization_term += coe_neighbor * torch.sum(neighbor_distance ** 2)
 
     return regularization_term
 

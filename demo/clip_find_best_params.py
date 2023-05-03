@@ -76,7 +76,10 @@ def objective(trial):
 
     coe_image = trial.suggest_float("image_coe", 1e-6, 1.0, log=True)
 
-    coe_distance = trial.suggest_float("distance_coe", 1e-6, 1.0, log=True)
+    coe_overlap = trial.suggest_float("overlap_coe", 1e-6, 1.0, log=True)
+    
+    num_neighbor = trial.suggest_int("neighbor_num", 1, 8)
+    coe_neighbor = trial.suggest_float("neighbor_coe", 1e-6, 1.0, log=True)
 
     # Initializations
     shapes = []
@@ -180,7 +183,11 @@ def objective(trial):
             coe_angle=coe_angle,
         )
         pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
-            shapes, shape_groups, coe_distance=coe_distance
+            shapes,
+            shape_groups,
+            coe_overlap=coe_overlap,
+            num_neighbor=num_neighbor,
+            coe_neighbor=coe_neighbor,
         )
         image_regularization_loss = image_regularization_term(img, coe_image=coe_image)
         loss = (

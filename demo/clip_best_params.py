@@ -39,7 +39,10 @@ if os.path.exists("clip_best_params.pkl"):
 
     coe_image = torch.tensor(best_params["image_coe"], dtype=torch.float32)
 
-    coe_distance = torch.tensor(best_params["distance_coe"], dtype=torch.float32)
+    coe_overlap = torch.tensor(best_params["overlap_coe"], dtype=torch.float32)
+
+    num_neighbor = best_params["neighbor_num"]
+    coe_neighbor = torch.tensor(best_params["neighbor_coe"], dtype=torch.float32)
 else:
     print("No best parameters found, using default parameters...")
     delta_lr = 0.01
@@ -55,7 +58,10 @@ else:
 
     coe_image = torch.tensor(0.0, dtype=torch.float32)
 
-    coe_distance = torch.tensor(1e-4, dtype=torch.float32)
+    coe_overlap = torch.tensor(1e-4, dtype=torch.float32)
+
+    num_neighbor = 8
+    coe_neighbor = torch.tensor(1e-4, dtype=torch.float32)
 
 # Initialize CLIP text input
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -363,7 +369,11 @@ for t in range(num_interations):
         coe_angle=coe_angle,
     )
     pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
-        shapes, shape_groups, coe_distance=coe_distance
+        shapes,
+        shape_groups,
+        coe_overlap=coe_overlap,
+        num_neighbor=num_neighbor,
+        coe_neighbor=coe_neighbor,
     )
     image_regularization_loss = image_regularization_term(img, coe_image=coe_image)
     loss = (

@@ -50,7 +50,10 @@ def objective(trial):
     angle_coe = trial.suggest_float("angle_coe", 1e-6, 1.0, log=True)
     coe_angle = torch.tensor(angle_coe, dtype=torch.float32)
 
-    coe_distance = trial.suggest_float("distance_coe", 1e-6, 1.0, log=True)
+    coe_overlap = trial.suggest_float("overlap_coe", 1e-6, 1.0, log=True)
+    
+    num_neighbor = trial.suggest_int("neighbor_num", 1, 8)
+    coe_neighbor = trial.suggest_float("neighbor_coe", 1e-6, 1.0, log=True)
 
     # Initializations
     shapes = []
@@ -136,7 +139,11 @@ def objective(trial):
             coe_angle=coe_angle,
         )
         pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
-            shapes, shape_groups, coe_distance=coe_distance
+            shapes,
+            shape_groups,
+            coe_overlap=coe_overlap,
+            num_neighbor=num_neighbor,
+            coe_neighbor=coe_neighbor,
         )
         loss = (
             pixel_loss

@@ -32,7 +32,10 @@ if os.path.exists("target_best_params.pkl"):
     )
     coe_angle = torch.tensor(best_params["angle_coe"], dtype=torch.float32)
 
-    coe_distance = torch.tensor(best_params["distance_coe"], dtype=torch.float32)
+    coe_overlap = torch.tensor(best_params["overlap_coe"], dtype=torch.float32)
+
+    num_neighbor = best_params["neighbor_num"]
+    coe_neighbor = torch.tensor(best_params["neighbor_coe"], dtype=torch.float32)
 else:
     print("No best parameters found, using default parameters...")
     delta_lr = 0.01
@@ -44,7 +47,10 @@ else:
     coe_displacement = torch.tensor([1e-4, 1e-4], dtype=torch.float32)
     coe_angle = torch.tensor(1e-4, dtype=torch.float32)
 
-    coe_distance = torch.tensor(0.0, dtype=torch.float32)
+    coe_overlap = torch.tensor(0.0, dtype=torch.float32)
+
+    num_neighbor = 1
+    coe_neighbor = torch.tensor(0.0, dtype=torch.float32)
 
 # Use GPU if available
 pydiffvg.set_use_gpu(torch.cuda.is_available())
@@ -168,7 +174,11 @@ for t in range(num_interations):
         coe_angle=coe_angle,
     )
     pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
-        shapes, shape_groups, coe_distance=coe_distance
+        shapes,
+        shape_groups,
+        coe_overlap=coe_overlap,
+        num_neighbor=num_neighbor,
+        coe_neighbor=coe_neighbor,
     )
     loss = pixel_loss + diffvg_regularization_loss + pairwise_diffvg_regularization_loss
 
