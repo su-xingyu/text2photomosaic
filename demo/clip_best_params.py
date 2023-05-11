@@ -6,6 +6,7 @@ from utils import (
     diffvg_regularization_term,
     pairwise_diffvg_regularization_term,
     image_regularization_term,
+    joint_regularization_term,
 )
 import torchvision.transforms as transforms
 import clip
@@ -43,6 +44,8 @@ if os.path.exists("clip_best_params.pkl"):
 
     num_neighbor = best_params["neighbor_num"]
     coe_neighbor = torch.tensor(best_params["neighbor_coe"], dtype=torch.float32)
+
+    coe_joint = torch.tensor(best_params["joint_coe"], dtype=torch.float32)
 else:
     print("No best parameters found, using default parameters...")
     delta_lr = 0.01
@@ -60,8 +63,10 @@ else:
 
     coe_overlap = torch.tensor(1e-4, dtype=torch.float32)
 
-    num_neighbor = 8
-    coe_neighbor = torch.tensor(1e-4, dtype=torch.float32)
+    num_neighbor = 1
+    coe_neighbor = torch.tensor(0.0, dtype=torch.float32)
+
+    coe_joint = torch.tensor(1e-4, dtype=torch.float32)
 
 # Initialize CLIP text input
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -340,8 +345,8 @@ for t in range(num_interations):
     img = img.permute(0, 3, 1, 2)  # NHWC -> NCHW
 
     # Compute the loss
-    pos_clip_loss = 0
-    neg_clip_loss = 0
+    pos_clip_loss = torch.zeros(1, device=pydiffvg.get_device())
+    neg_clip_loss = torch.zeros(1, device=pydiffvg.get_device())
     NUM_AUGS = 4
     img_augs = []
     for n in range(NUM_AUGS):
@@ -361,27 +366,47 @@ for t in range(num_interations):
             )
 
     # Regularization term
-    diffvg_regularization_loss = diffvg_regularization_term(
-        shapes,
-        shape_groups,
-        coe_delta=coe_delta,
-        coe_displacement=coe_displacement,
-        coe_angle=coe_angle,
-    )
-    pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
-        shapes,
-        shape_groups,
-        coe_overlap=coe_overlap,
-        num_neighbor=num_neighbor,
-        coe_neighbor=coe_neighbor,
-    )
-    image_regularization_loss = image_regularization_term(img, coe_image=coe_image)
+    diffvg_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
+    if (
+        torch.norm(coe_delta) > 0
+        or torch.norm(coe_displacement) > 0
+        or torch.norm(coe_angle) > 0
+    ):
+        diffvg_regularization_loss = diffvg_regularization_term(
+            shapes,
+            shape_groups,
+            coe_delta=coe_delta,
+            coe_displacement=coe_displacement,
+            coe_angle=coe_angle,
+        )
+
+    pairwise_diffvg_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
+    if torch.norm(coe_overlap) > 0 or torch.norm(coe_neighbor) > 0:
+        pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
+            shapes,
+            shape_groups,
+            coe_overlap=coe_overlap,
+            num_neighbor=num_neighbor,
+            coe_neighbor=coe_neighbor,
+        )
+
+    image_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
+    if torch.norm(coe_image) > 0:
+        image_regularization_loss = image_regularization_term(img, coe_image=coe_image)
+
+    joint_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
+    if torch.norm(coe_joint) > 0:
+        joint_regularization_loss = joint_regularization_term(
+            shapes, shape_groups, img, num_neighbor=1, coe_joint=coe_joint
+        )
+
     loss = (
         pos_clip_loss
         + neg_clip_loss
         + diffvg_regularization_loss
         + pairwise_diffvg_regularization_loss
         + image_regularization_loss
+        + joint_regularization_loss
     )
 
     print("pos_clip_loss:", pos_clip_loss.item())
@@ -392,6 +417,7 @@ for t in range(num_interations):
         pairwise_diffvg_regularization_loss.item(),
     )
     print("image_regularization_loss:", image_regularization_loss.item())
+    print("joint_regularization_loss:", joint_regularization_loss.item())
     print("loss:", loss.item())
 
     # Backpropagate the gradients.
