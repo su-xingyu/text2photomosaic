@@ -1,5 +1,6 @@
 import torch
 import torchvision.transforms as transforms
+import pydiffvg
 
 TWO_PI = 2 * torch.pi
 
@@ -190,3 +191,148 @@ def joint_regularization_term(
     regularization_term = coe_joint * torch.sum(neighbor_distance**2)
 
     return regularization_term
+
+def calc_loss(shapes, shape_groups, augment_trans, model, text_features, with_reg=False, canvas_width=224, canvas_height=224):
+    render = pydiffvg.RenderFunction.apply
+    scene_args = pydiffvg.RenderFunction.serialize_scene(
+        canvas_width, canvas_height, shapes, shape_groups
+    )
+    img = render(
+        canvas_width,  # width
+        canvas_height,  # height
+        2,  # num_samples_x
+        2,  # num_samples_y
+        99999, # seed
+        None,  # background_image
+        *scene_args
+    )
+    # Transform image for CLIP input
+    img = img[:, :, 3:4] * img[:, :, :3] + torch.ones(
+        img.shape[0], img.shape[1], 3, device=pydiffvg.get_device()
+    ) * (1 - img[:, :, 3:4])
+    img = img[:, :, :3]
+    img = img.unsqueeze(0)
+    img = img.permute(0, 3, 1, 2)  # NHWC -> NCHW
+
+    # Compute the loss
+    pos_clip_loss = 0
+    neg_clip_loss = 0
+    NUM_AUGS = 4
+    img_augs = []
+    for n in range(NUM_AUGS):
+        img_augs.append(augment_trans(img))
+    img_batch = torch.cat(img_augs)
+    image_features = model.encode_image(img_batch)
+    for n in range(NUM_AUGS):
+        pos_clip_loss -= torch.cosine_similarity(
+            text_features, image_features[n : n + 1], dim=1
+        )
+        if use_neg:
+            neg_clip_loss += (
+                torch.cosine_similarity(
+                    text_features_neg, image_features[n : n + 1], dim=1
+                )
+                * neg_clip_coe
+            )
+    
+    if with_reg:
+        # Regularization term
+        diffvg_regularization_loss = diffvg_regularization_term(
+            shapes,
+            shape_groups,
+            coe_delta=coe_delta,
+            coe_displacement=coe_displacement,
+            coe_angle=coe_angle,
+        )
+        pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
+            shapes, shape_groups
+        )
+        image_regularization_loss = image_regularization_term(img, coe_image=coe_image)
+        loss = (
+            pos_clip_loss
+            + neg_clip_loss
+            + diffvg_regularization_loss
+            + pairwise_diffvg_regularization_loss
+            + image_regularization_loss
+        )
+    else:
+        # without regularization
+        loss = (
+            pos_clip_loss
+            + neg_clip_loss
+        )
+        
+    return loss
+
+def render_scene(name, shapes, shape_groups, canvas_width=224, canvas_height=224, gamma=1.0):
+    render = pydiffvg.RenderFunction.apply
+    scene_args = pydiffvg.RenderFunction.serialize_scene(
+        canvas_width, canvas_height, shapes, shape_groups
+    )
+    img = render(
+        canvas_width,  # width
+        canvas_height,  # height
+        2,  # num_samples_x
+        2,  # num_samples_y
+        99999,  # seed
+        None,  # background_image
+        *scene_args
+    )
+    pydiffvg.imwrite(
+        img.cpu(), "results/postprocess/output-{}.png".format(name), gamma=gamma
+    )
+
+def rec2x(ori_shapes, ori_shape_groups):
+    render_scene("before", ori_shapes, ori_shape_groups)
+    origin_loss = calc_loss(ori_shapes, ori_shape_groups)
+    print("Origin loss = ", origin_loss)
+
+    # render_scene("after", ori_shapes[:-1], ori_shape_groups[:-1])
+    # render_scene("after2", ori_shapes, ori_shape_groups)
+    # return
+
+    for (id, (rect, rect_group)) in enumerate(zip(ori_shapes, ori_shape_groups)):
+
+        with torch.no_grad():
+            ori_shapes[id].delta += torch.tensor([5, 5])
+            ori_shapes[id].update()
+        cur_loss = calc_loss(ori_shapes, ori_shape_groups)
+        print("cur loss = ", cur_loss)
+        if (cur_loss < origin_loss):
+            print("update")
+            # origin_loss = cur_loss
+        else:
+            with torch.no_grad():
+                ori_shapes[id].delta += torch.tensor([-5, -5])
+                ori_shapes[id].update()
+    render_scene("after", ori_shapes, ori_shape_groups)
+
+def recdel(ori_shapes, ori_shape_groups):
+    origin_loss = calc_loss(ori_shapes, ori_shape_groups)
+    print("Origin loss = ", origin_loss)
+
+    loss_contrib = []
+
+    for (id, (rect, rect_group)) in enumerate(zip(ori_shapes, ori_shape_groups)):
+        shapes = ori_shapes.copy()
+        shapes.remove(rect)
+        # print(shapes)
+        # print(type(shapes))
+        shape_groups = ori_shape_groups.copy()
+        shape_groups.remove(rect_group)
+        
+        for id_ in range(id, len(shapes)):
+            # print(shapes[id_].id)
+            # print(shape_groups[id_].id)
+            # print(type(shapes[id_].id))
+            # shapes[id_].id = str(int(shapes[id_].id)-1)
+            # print("shapes_groupsID: ", shape_groups[id_].shape_ids)
+            # print(torch.tensor([int(shape_groups[id_].shape_ids[0]) - 1]))
+            shape_groups[id_].shape_ids = torch.tensor([int(shape_groups[id_].shape_ids[0])-1])
+
+        print("calculating loss...")
+        cur_loss = calc_loss(shapes, shape_groups)
+        print("cur loss = ", cur_loss)
+        loss_contrib.append((id, - cur_loss + origin_loss))
+
+    print(loss_contrib)

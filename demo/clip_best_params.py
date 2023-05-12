@@ -6,7 +6,6 @@ from utils import (
     diffvg_regularization_term,
     pairwise_diffvg_regularization_term,
     image_regularization_term,
-    joint_regularization_term,
 )
 import torchvision.transforms as transforms
 import clip
@@ -40,12 +39,7 @@ if os.path.exists("clip_best_params.pkl"):
 
     coe_image = torch.tensor(best_params["image_coe"], dtype=torch.float32)
 
-    coe_overlap = torch.tensor(best_params["overlap_coe"], dtype=torch.float32)
-
-    num_neighbor = best_params["neighbor_num"]
-    coe_neighbor = torch.tensor(best_params["neighbor_coe"], dtype=torch.float32)
-
-    coe_joint = torch.tensor(best_params["joint_coe"], dtype=torch.float32)
+    coe_distance = torch.tensor(best_params["distance_coe"], dtype=torch.float32)
 else:
     print("No best parameters found, using default parameters...")
     delta_lr = 0.01
@@ -61,12 +55,7 @@ else:
 
     coe_image = torch.tensor(0.0, dtype=torch.float32)
 
-    coe_overlap = torch.tensor(1e-4, dtype=torch.float32)
-
-    num_neighbor = 1
-    coe_neighbor = torch.tensor(0.0, dtype=torch.float32)
-
-    coe_joint = torch.tensor(1e-4, dtype=torch.float32)
+    coe_distance = torch.tensor(1e-4, dtype=torch.float32)
 
 # Initialize CLIP text input
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -147,7 +136,7 @@ optimizer_color = torch.optim.Adam(
 )
 
 # Run Adam iterations.
-num_interations = 50
+num_interations = 5
 scheduler_delta = StepLR(optimizer_delta, step_size=num_interations // 3, gamma=0.5)
 scheduler_angle = StepLR(optimizer_angle, step_size=num_interations // 3, gamma=0.5)
 scheduler_translation = StepLR(
@@ -267,41 +256,57 @@ def rec2x(ori_shapes, ori_shape_groups):
                 ori_shapes[id].delta += torch.tensor([-5, -5])
                 ori_shapes[id].update()
     render_scene("after", ori_shapes, ori_shape_groups)
+    return ori_shapes, ori_shape_groups
 
-def recdel(ori_shapes, ori_shape_groups):
-    origin_loss = calc_loss(ori_shapes, ori_shape_groups)
-    print("Origin loss = ", origin_loss)
+def recdel(ori_shapes_, ori_shape_groups_, num_del=3):
+    ori_shapes = ori_shapes_.copy()
+    ori_shape_groups = ori_shape_groups_.copy()
+    for i in range(num_del):
+        print("finding the ", i, "th shape to delete")
 
-    loss_contrib = []
+        origin_loss = calc_loss(ori_shapes, ori_shape_groups)
+        print("Origin loss = ", origin_loss)
 
-    for (id, (rect, rect_group)) in enumerate(zip(ori_shapes, ori_shape_groups)):
+        loss_contrib = []
+
+        for (id, (rect, rect_group)) in enumerate(zip(ori_shapes, ori_shape_groups)):
+            shapes = ori_shapes.copy()
+            shapes.remove(rect)
+            # print(shapes)
+            # print(type(shapes))
+            shape_groups = ori_shape_groups.copy()
+            shape_groups.remove(rect_group)
+
+            for id_ in range(id, len(shapes)):
+                #import ipdb; ipdb.set_trace()
+                shape_groups[id_].shape_ids = torch.tensor(
+                    [int(shape_groups[id_].shape_ids[0])-1])
+
+            # print("calculating loss...")
+            cur_loss = calc_loss(shapes, shape_groups)
+            # print("cur loss = ", cur_loss)
+            loss_contrib.append((id, - cur_loss + origin_loss))
+
+        print(loss_contrib)
+        to_del = max(loss_contrib, key=lambda x: x[1])
+
+        print("delete the ", to_del[0], "th shape")
         shapes = ori_shapes.copy()
-        shapes.remove(rect)
-        # print(shapes)
-        # print(type(shapes))
+        shapes.remove(ori_shapes[to_del[0]])
         shape_groups = ori_shape_groups.copy()
-        shape_groups.remove(rect_group)
-        
-        for id_ in range(id, len(shapes)):
-            # print(shapes[id_].id)
-            # print(shape_groups[id_].id)
-            # print(type(shapes[id_].id))
-            # shapes[id_].id = str(int(shapes[id_].id)-1)
-            # print("shapes_groupsID: ", shape_groups[id_].shape_ids)
-            # print(torch.tensor([int(shape_groups[id_].shape_ids[0]) - 1]))
-            shape_groups[id_].shape_ids = torch.tensor([int(shape_groups[id_].shape_ids[0])-1])
+        shape_groups.remove(ori_shape_groups[to_del[0]])
 
-        print("calculating loss...")
-        cur_loss = calc_loss(shapes, shape_groups)
-        print("cur loss = ", cur_loss)
-        loss_contrib.append((id, - cur_loss + origin_loss))
+        for id_ in range(to_del[0], len(shapes)):
+            shape_groups[id_].shape_ids = torch.tensor(
+                [int(shape_groups[id_].shape_ids[0])-1])
+        ori_shapes = shapes
+        ori_shape_groups = shape_groups
 
-    print(loss_contrib)
+    return shapes, shape_groups
 
 
-
-# rec2x(shapes, shape_groups)
-recdel(shapes, shape_groups)
+# shapes, shape_groups = rec2x(shapes, shape_groups)
+shapes, shape_groups = recdel(shapes, shape_groups)
 quit()
 
 for t in range(num_interations):
@@ -345,8 +350,8 @@ for t in range(num_interations):
     img = img.permute(0, 3, 1, 2)  # NHWC -> NCHW
 
     # Compute the loss
-    pos_clip_loss = torch.zeros(1, device=pydiffvg.get_device())
-    neg_clip_loss = torch.zeros(1, device=pydiffvg.get_device())
+    pos_clip_loss = 0
+    neg_clip_loss = 0
     NUM_AUGS = 4
     img_augs = []
     for n in range(NUM_AUGS):
@@ -366,47 +371,23 @@ for t in range(num_interations):
             )
 
     # Regularization term
-    diffvg_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
-    if (
-        torch.norm(coe_delta) > 0
-        or torch.norm(coe_displacement) > 0
-        or torch.norm(coe_angle) > 0
-    ):
-        diffvg_regularization_loss = diffvg_regularization_term(
-            shapes,
-            shape_groups,
-            coe_delta=coe_delta,
-            coe_displacement=coe_displacement,
-            coe_angle=coe_angle,
-        )
-
-    pairwise_diffvg_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
-    if torch.norm(coe_overlap) > 0 or torch.norm(coe_neighbor) > 0:
-        pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
-            shapes,
-            shape_groups,
-            coe_overlap=coe_overlap,
-            num_neighbor=num_neighbor,
-            coe_neighbor=coe_neighbor,
-        )
-
-    image_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
-    if torch.norm(coe_image) > 0:
-        image_regularization_loss = image_regularization_term(img, coe_image=coe_image)
-
-    joint_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
-    if torch.norm(coe_joint) > 0:
-        joint_regularization_loss = joint_regularization_term(
-            shapes, shape_groups, img, num_neighbor=1, coe_joint=coe_joint
-        )
-
+    diffvg_regularization_loss = diffvg_regularization_term(
+        shapes,
+        shape_groups,
+        coe_delta=coe_delta,
+        coe_displacement=coe_displacement,
+        coe_angle=coe_angle,
+    )
+    pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
+        shapes, shape_groups, coe_distance=coe_distance
+    )
+    image_regularization_loss = image_regularization_term(img, coe_image=coe_image)
     loss = (
         pos_clip_loss
         + neg_clip_loss
         + diffvg_regularization_loss
         + pairwise_diffvg_regularization_loss
         + image_regularization_loss
-        + joint_regularization_loss
     )
 
     print("pos_clip_loss:", pos_clip_loss.item())
@@ -417,7 +398,6 @@ for t in range(num_interations):
         pairwise_diffvg_regularization_loss.item(),
     )
     print("image_regularization_loss:", image_regularization_loss.item())
-    print("joint_regularization_loss:", joint_regularization_loss.item())
     print("loss:", loss.item())
 
     # Backpropagate the gradients.
