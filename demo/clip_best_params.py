@@ -12,6 +12,7 @@ import clip
 from torch.optim.lr_scheduler import StepLR
 import os
 import pickle
+import gc
 
 # Load the best parameters
 if os.path.exists("clip_best_params.pkl"):
@@ -134,6 +135,8 @@ optimizer_translation = torch.optim.Adam(
 optimizer_color = torch.optim.Adam(
     [rect_group.color for rect_group in shape_groups], lr=color_lr
 )
+
+print("Start training...")
 
 # Run Adam iterations.
 num_interations = 5
@@ -259,50 +262,70 @@ def rec2x(ori_shapes, ori_shape_groups):
     return ori_shapes, ori_shape_groups
 
 def recdel(ori_shapes_, ori_shape_groups_, num_del=3):
-    ori_shapes = ori_shapes_.copy()
-    ori_shape_groups = ori_shape_groups_.copy()
-    for i in range(num_del):
-        print("finding the ", i, "th shape to delete")
+    with torch.no_grad():
+        best_shapes = ori_shapes_.copy()
+        best_shape_groups = ori_shape_groups_.copy()
+        max_contrib = 0
 
-        origin_loss = calc_loss(ori_shapes, ori_shape_groups)
-        print("Origin loss = ", origin_loss)
+        # import ipdb; ipdb.set_trace()
+        from tqdm import tqdm
+        shapes = None
+        shape_groups = None
 
-        loss_contrib = []
+        # flz: only for debug
+        iddd = 100
+        best_shapes.remove(best_shapes[iddd])
+        best_shape_groups.remove(best_shape_groups[iddd])
 
-        for (id, (rect, rect_group)) in enumerate(zip(ori_shapes, ori_shape_groups)):
-            shapes = ori_shapes.copy()
-            shapes.remove(rect)
-            # print(shapes)
-            # print(type(shapes))
-            shape_groups = ori_shape_groups.copy()
-            shape_groups.remove(rect_group)
+        for id_ in range(iddd, len(best_shapes)):
+            best_shape_groups[id_].shape_ids = torch.tensor(
+                [int(best_shape_groups[id_].shape_ids[0])-1])
+        
+        print(calc_loss(best_shapes, best_shape_groups))
+        # flz: debug done
 
-            for id_ in range(id, len(shapes)):
-                #import ipdb; ipdb.set_trace()
-                shape_groups[id_].shape_ids = torch.tensor(
-                    [int(shape_groups[id_].shape_ids[0])-1])
+        for i in range(num_del):
+            import ipdb; ipdb.set_trace()
+            ori_shapes = best_shapes.copy()
+            ori_shape_groups = best_shape_groups.copy()
 
-            # print("calculating loss...")
-            cur_loss = calc_loss(shapes, shape_groups)
-            # print("cur loss = ", cur_loss)
-            loss_contrib.append((id, - cur_loss + origin_loss))
+            best_shapes = None
+            best_shape_groups = None
+            max_contrib = 0
 
-        print(loss_contrib)
-        to_del = max(loss_contrib, key=lambda x: x[1])
+            print("finding the ", i+1, "th shape to delete")
 
-        print("delete the ", to_del[0], "th shape")
-        shapes = ori_shapes.copy()
-        shapes.remove(ori_shapes[to_del[0]])
-        shape_groups = ori_shape_groups.copy()
-        shape_groups.remove(ori_shape_groups[to_del[0]])
+            origin_loss = calc_loss(ori_shapes, ori_shape_groups)
+            print("Origin loss = ", origin_loss)
 
-        for id_ in range(to_del[0], len(shapes)):
-            shape_groups[id_].shape_ids = torch.tensor(
-                [int(shape_groups[id_].shape_ids[0])-1])
-        ori_shapes = shapes
-        ori_shape_groups = shape_groups
 
-    return shapes, shape_groups
+            for (id, (rect, rect_group)) in enumerate(tqdm(zip(ori_shapes, ori_shape_groups), total=len(ori_shapes))):
+                shapes = ori_shapes.copy()
+                shapes.remove(rect)
+                shape_groups = ori_shape_groups.copy()
+                shape_groups.remove(rect_group)
+
+                for id_ in range(id, len(shapes)):
+                    #import ipdb; ipdb.set_trace()
+                    shape_groups[id_].shape_ids = torch.tensor(
+                        [int(shape_groups[id_].shape_ids[0])-1])
+
+                cur_loss = origin_loss - calc_loss(shapes, shape_groups)
+                print("at ", id, ", cur loss = ", cur_loss)
+                if cur_loss > max_contrib:
+                    max_contrib = cur_loss
+                    best_shapes = shapes.copy()
+                    best_shape_groups = shape_groups.copy()
+                # loss_contrib.append((id, - cur_loss + origin_loss))
+
+            # print(loss_contrib)
+
+            if best_shapes is None:
+                return ori_shapes, ori_shape_groups
+
+            gc.collect()
+
+        return ori_shapes, ori_shape_groups
 
 
 # shapes, shape_groups = rec2x(shapes, shape_groups)
