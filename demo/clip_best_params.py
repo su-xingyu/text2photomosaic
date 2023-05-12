@@ -261,21 +261,18 @@ def rec2x(ori_shapes, ori_shape_groups):
     render_scene("after", ori_shapes, ori_shape_groups)
     return ori_shapes, ori_shape_groups
 
-def find_which_to_del(ori_shapes, ori_shape_groups):
+def find_which_to_del(shapes, shape_groups) -> bool:
     from tqdm import tqdm
-    best_shapes = None
-    best_shape_groups = None
+    best_id = None
     max_contrib = 0
 
-    origin_loss = calc_loss(ori_shapes, ori_shape_groups)
+    origin_loss = calc_loss(shapes, shape_groups)
     print("Origin loss = ", origin_loss)
 
-    for (id, (rect, rect_group)) in enumerate(tqdm(zip(ori_shapes, ori_shape_groups), total=len(ori_shapes))):
+    for (id, (rect, rect_group)) in enumerate(tqdm(zip(shapes, shape_groups), total=len(shapes))):
         # copy current data from original ones
         # and delete the id-th shape
-        shapes = ori_shapes.copy()
         shapes.remove(rect)
-        shape_groups = ori_shape_groups.copy()
         shape_groups.remove(rect_group)
 
         # update the shape_ids in shape_groups
@@ -287,24 +284,55 @@ def find_which_to_del(ori_shapes, ori_shape_groups):
         cur_loss = origin_loss - calc_loss(shapes, shape_groups)
         print("at ", id, ", cur loss = ", cur_loss)
 
-        if cur_loss > 0:
-            print("delete id = ", id)
-            best_shapes = shapes.copy()
-            best_shape_groups = shape_groups.copy()
-            return best_shapes, best_shape_groups
+        # flz: only for debug
+        # for id_ in range(0, len(shapes)):
+        #     print(shape_groups[id_].shape_ids[0])
+        # flz: end of debug
 
-        # if cur_loss > max_contrib:
-        #     max_contrib = cur_loss
-        #     best_shapes = shapes.copy()
-        #     best_shape_groups = shape_groups.copy()
+        # recover the deleted shape
+        for id_ in range(id, len(shapes)):
+            shape_groups[id_].shape_ids = torch.tensor(
+                [int(shape_groups[id_].shape_ids[0])+1])
+        shapes.insert(id, rect)
+        shape_groups.insert(id, rect_group) 
+
+        # flz: only for debug
+        # import ipdb; ipdb.set_trace()
+        # if cur_loss > 0:
+        #     print("delete id = ", id)
+        #     shapes.remove(rect)
+        #     shape_groups.remove(rect_group)
+
+        #     # update the shape_ids in shape_groups
+        #     for id_ in range(id, len(shapes)):
+        #         #import ipdb; ipdb.set_trace()
+        #         shape_groups[id_].shape_ids = torch.tensor(
+        #             [int(shape_groups[id_].shape_ids[0])-1])
+        #     return True
+        # flz: end of debug
+
+        if cur_loss > max_contrib:
+            max_contrib = cur_loss
+            best_id = id
     
+    if best_id is None:
+        print("No shape to delete")
+        return False
+    
+    shapes.remove(shapes[best_id])
+    shape_groups.remove(shape_groups[best_id])
+
+    # update the shape_ids in shape_groups
+    for id_ in range(best_id, len(shapes)):
+        shape_groups[id_].shape_ids = torch.tensor(
+            [int(shape_groups[id_].shape_ids[0])-1])
+
+    return shapes, shape_groups 
     return best_shapes, best_shape_groups
     
 
-def recdel(ori_shapes_, ori_shape_groups_, num_del=3):
+def recdel(ori_shapes, ori_shape_groups, num_del=3):
     with torch.no_grad():
-        best_shapes = ori_shapes_.copy()
-        best_shape_groups = ori_shape_groups_.copy()
 
         # flz: only for debug
         # iddd = 100
@@ -321,17 +349,16 @@ def recdel(ori_shapes_, ori_shape_groups_, num_del=3):
         for i in range(num_del):
             print("looking for the ", i+1, "th shape to delete")
 
-            import ipdb; ipdb.set_trace()
-            ori_shapes = best_shapes.copy()
-            ori_shape_groups = best_shape_groups.copy()
+            # import ipdb; ipdb.set_trace()
 
-            best_shapes, best_shape_groups = find_which_to_del(ori_shapes, ori_shape_groups)
+            applied_del = find_which_to_del(ori_shapes, ori_shape_groups)
 
-            if best_shapes is None:
+            if not applied_del:
                 return ori_shapes, ori_shape_groups
 
             gc.collect()
-            render_scene("delete-{}".format(i+1), best_shapes, best_shape_groups)
+            # ipdb.set_trace()
+            render_scene("delete-{}".format(i+1), ori_shapes, ori_shape_groups)
 
         return ori_shapes, ori_shape_groups
 
