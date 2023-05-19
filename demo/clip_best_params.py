@@ -2,12 +2,7 @@ from subprocess import call
 import pydiffvg
 import torch
 from my_shape import PolygonRect, RotationalShapeGroup
-from utils import (
-    diffvg_regularization_term,
-    pairwise_diffvg_regularization_term,
-    image_regularization_term,
-    joint_regularization_term,
-)
+from utils import cal_loss, postprocess_delete_rect
 import torchvision.transforms as transforms
 import clip
 from torch.optim.lr_scheduler import StepLR
@@ -28,24 +23,24 @@ if os.path.exists("clip_best_params.pkl"):
 
     neg_clip_coe = best_params["neg_clip_coe"]
 
-    coe_delta = torch.tensor(
+    delta_coe = torch.tensor(
         [best_params["reg_delta_coe_x"], best_params["reg_delta_coe_y"]],
         dtype=torch.float32,
     )
-    coe_displacement = torch.tensor(
+    displacement_coe = torch.tensor(
         [best_params["reg_displacement_coe_x"], best_params["reg_displacement_coe_y"]],
         dtype=torch.float32,
     )
-    coe_angle = torch.tensor(best_params["angle_coe"], dtype=torch.float32)
+    angle_coe = torch.tensor(best_params["angle_coe"], dtype=torch.float32)
 
-    coe_image = torch.tensor(best_params["image_coe"], dtype=torch.float32)
+    image_coe = torch.tensor(best_params["image_coe"], dtype=torch.float32)
 
-    coe_overlap = torch.tensor(best_params["overlap_coe"], dtype=torch.float32)
+    overlap_coe = torch.tensor(best_params["overlap_coe"], dtype=torch.float32)
 
-    num_neighbor = best_params["neighbor_num"]
-    coe_neighbor = torch.tensor(best_params["neighbor_coe"], dtype=torch.float32)
+    neighbor_num = best_params["neighbor_num"]
+    neighbor_coe = torch.tensor(best_params["neighbor_coe"], dtype=torch.float32)
 
-    coe_joint = torch.tensor(best_params["joint_coe"], dtype=torch.float32)
+    joint_coe = torch.tensor(best_params["joint_coe"], dtype=torch.float32)
 else:
     print("No best parameters found, using default parameters...")
     delta_lr = 0.01
@@ -55,18 +50,30 @@ else:
 
     neg_clip_coe = 0.3
 
-    coe_delta = torch.tensor([1e-4, 1e-4], dtype=torch.float32)
-    coe_displacement = torch.tensor([0.0, 0.0], dtype=torch.float32)
-    coe_angle = torch.tensor(0.0, dtype=torch.float32)
+    delta_coe = torch.tensor([1e-4, 1e-4], dtype=torch.float32)
+    displacement_coe = torch.tensor([0.0, 0.0], dtype=torch.float32)
+    angle_coe = torch.tensor(0.0, dtype=torch.float32)
 
-    coe_image = torch.tensor(0.0, dtype=torch.float32)
+    image_coe = torch.tensor(0.0, dtype=torch.float32)
 
-    coe_overlap = torch.tensor(1e-4, dtype=torch.float32)
+    overlap_coe = torch.tensor(1e-4, dtype=torch.float32)
 
-    num_neighbor = 1
-    coe_neighbor = torch.tensor(0.0, dtype=torch.float32)
+    neighbor_num = 1
+    neighbor_coe = torch.tensor(0.0, dtype=torch.float32)
 
-    coe_joint = torch.tensor(1e-4, dtype=torch.float32)
+    joint_coe = torch.tensor(1e-4, dtype=torch.float32)
+
+coe_dict = {
+    "neg_clip_coe": neg_clip_coe,
+    "delta_coe": delta_coe,
+    "displacement_coe": displacement_coe,
+    "angle_coe": angle_coe,
+    "image_coe": image_coe,
+    "overlap_coe": overlap_coe,
+    "neighbor_num": neighbor_num,
+    "neighbor_coe": neighbor_coe,
+    "joint_coe": joint_coe,
+}
 
 # Initialize CLIP text input
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -156,7 +163,7 @@ scheduler_translation = StepLR(
 scheduler_color = StepLR(optimizer_color, step_size=num_interations // 3, gamma=0.5)
 
 for t in range(num_interations):
-    print("iteration:", t)
+    print("Optimization iteration:", t)
 
     optimizer_delta.zero_grad()
     optimizer_angle.zero_grad()
@@ -187,89 +194,19 @@ for t in range(num_interations):
             img.cpu(), "results/clip/iter_{}.png".format(t // 5), gamma=gamma
         )
 
-    # Transform image for CLIP input
-    img = img[:, :, 3:4] * img[:, :, :3] + torch.ones(
-        img.shape[0], img.shape[1], 3, device=pydiffvg.get_device()
-    ) * (1 - img[:, :, 3:4])
-    img = img[:, :, :3]
-    img = img.unsqueeze(0)
-    img = img.permute(0, 3, 1, 2)  # NHWC -> NCHW
-
-    # Compute the loss
-    pos_clip_loss = torch.zeros(1, device=pydiffvg.get_device())
-    neg_clip_loss = torch.zeros(1, device=pydiffvg.get_device())
-    NUM_AUGS = 4
-    img_augs = []
-    for n in range(NUM_AUGS):
-        img_augs.append(augment_trans(img))
-    img_batch = torch.cat(img_augs)
-    image_features = model.encode_image(img_batch)
-    for n in range(NUM_AUGS):
-        pos_clip_loss -= torch.cosine_similarity(
-            text_features, image_features[n : n + 1], dim=1
-        )
-        if use_neg:
-            neg_clip_loss += (
-                torch.cosine_similarity(
-                    text_features_neg, image_features[n : n + 1], dim=1
-                )
-                * neg_clip_coe
-            )
-
-    # Regularization term
-    diffvg_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
-    if (
-        torch.norm(coe_delta) > 0
-        or torch.norm(coe_displacement) > 0
-        or torch.norm(coe_angle) > 0
-    ):
-        diffvg_regularization_loss = diffvg_regularization_term(
-            shapes,
-            shape_groups,
-            coe_delta=coe_delta,
-            coe_displacement=coe_displacement,
-            coe_angle=coe_angle,
-        )
-
-    pairwise_diffvg_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
-    if torch.norm(coe_overlap) > 0 or torch.norm(coe_neighbor) > 0:
-        pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
-            shapes,
-            shape_groups,
-            coe_overlap=coe_overlap,
-            num_neighbor=num_neighbor,
-            coe_neighbor=coe_neighbor,
-        )
-
-    image_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
-    if torch.norm(coe_image) > 0:
-        image_regularization_loss = image_regularization_term(img, coe_image=coe_image)
-
-    joint_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
-    if torch.norm(coe_joint) > 0:
-        joint_regularization_loss = joint_regularization_term(
-            shapes, shape_groups, img, num_neighbor=1, coe_joint=coe_joint
-        )
-
-    loss = (
-        pos_clip_loss
-        + neg_clip_loss
-        + diffvg_regularization_loss
-        + pairwise_diffvg_regularization_loss
-        + image_regularization_loss
-        + joint_regularization_loss
+    loss, _ = cal_loss(
+        img,
+        shapes,
+        shape_groups,
+        model,
+        text_features,
+        coe_dict,
+        use_aug=True,
+        augment_trans=augment_trans,
+        use_neg=True,
+        text_features_neg=text_features_neg,
+        verbose=True,
     )
-
-    print("pos_clip_loss:", pos_clip_loss.item())
-    print("neg_clip_loss:", neg_clip_loss.item())
-    print("diffvg_regularization_loss:", diffvg_regularization_loss.item())
-    print(
-        "pairwise_diffvg_regularization_loss:",
-        pairwise_diffvg_regularization_loss.item(),
-    )
-    print("image_regularization_loss:", image_regularization_loss.item())
-    print("joint_regularization_loss:", joint_regularization_loss.item())
-    print("loss:", loss.item())
 
     # Backpropagate the gradients.
     loss.backward(retain_graph=True)
@@ -285,6 +222,18 @@ for t in range(num_interations):
     scheduler_delta.step()
     scheduler_angle.step()
     scheduler_translation.step()
+
+# We care only about pos_clip_loss when doing post-processing
+postprocess_delete_rect(
+    canvas_width,
+    canvas_height,
+    render,
+    shapes,
+    shape_groups,
+    model,
+    text_features,
+    verbose=True,
+)
 
 
 # Render the final result.
@@ -317,4 +266,3 @@ call(
     ]
 )
 
-# TODO: Fetch top k rectangles which contributes the most to the loss for image replacement

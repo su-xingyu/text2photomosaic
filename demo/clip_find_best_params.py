@@ -123,7 +123,7 @@ def objective(trial):
 
     # Run optimization iterations.
     for t in range(num_interations):
-        print("iteration:", t)
+        print("optimization iteration:", t)
 
         optimizer_delta.zero_grad()
         optimizer_angle.zero_grad()
