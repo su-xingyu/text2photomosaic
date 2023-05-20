@@ -5,6 +5,9 @@ import pydiffvg
 TWO_PI = 2 * torch.pi
 
 
+# ----------------------- Loss calculation -----------------------
+
+
 def diffvg_regularization_term(
     shapes,
     shape_groups,
@@ -192,37 +195,39 @@ def joint_regularization_term(
 
     return regularization_term
 
-def calc_loss(shapes, shape_groups, augment_trans, model, text_features, with_reg=False, canvas_width=224, canvas_height=224):
-    render = pydiffvg.RenderFunction.apply
-    scene_args = pydiffvg.RenderFunction.serialize_scene(
-        canvas_width, canvas_height, shapes, shape_groups
-    )
-    img = render(
-        canvas_width,  # width
-        canvas_height,  # height
-        2,  # num_samples_x
-        2,  # num_samples_y
-        99999, # seed
-        None,  # background_image
-        *scene_args
-    )
+
+def cal_loss(
+    image,
+    shapes,
+    shape_groups,
+    clip_model,
+    text_features,
+    coe_dict,
+    use_aug=True,
+    augment_trans=None,
+    use_neg=True,
+    text_features_neg=None,
+    verbose=True,
+):
     # Transform image for CLIP input
-    img = img[:, :, 3:4] * img[:, :, :3] + torch.ones(
-        img.shape[0], img.shape[1], 3, device=pydiffvg.get_device()
-    ) * (1 - img[:, :, 3:4])
-    img = img[:, :, :3]
-    img = img.unsqueeze(0)
-    img = img.permute(0, 3, 1, 2)  # NHWC -> NCHW
+    image = image[:, :, 3:4] * image[:, :, :3] + torch.ones(
+        image.shape[0], image.shape[1], 3, device=pydiffvg.get_device()
+    ) * (1 - image[:, :, 3:4])
+    image = image[:, :, :3]
+    image = image.unsqueeze(0)
+    image = image.permute(0, 3, 1, 2)  # NHWC -> NCHW
 
     # Compute the loss
-    pos_clip_loss = 0
-    neg_clip_loss = 0
-    NUM_AUGS = 4
-    img_augs = []
-    for n in range(NUM_AUGS):
-        img_augs.append(augment_trans(img))
+    pos_clip_loss = torch.zeros(1, device=pydiffvg.get_device())
+    neg_clip_loss = torch.zeros(1, device=pydiffvg.get_device())
+    NUM_AUGS = 1
+    img_augs = [image]
+    if use_aug:
+        NUM_AUGS = 4
+        for n in range(NUM_AUGS - 1):
+            img_augs.append(augment_trans(image))
     img_batch = torch.cat(img_augs)
-    image_features = model.encode_image(img_batch)
+    image_features = clip_model.encode_image(img_batch)
     for n in range(NUM_AUGS):
         pos_clip_loss -= torch.cosine_similarity(
             text_features, image_features[n : n + 1], dim=1
@@ -232,40 +237,90 @@ def calc_loss(shapes, shape_groups, augment_trans, model, text_features, with_re
                 torch.cosine_similarity(
                     text_features_neg, image_features[n : n + 1], dim=1
                 )
-                * neg_clip_coe
+                * coe_dict["neg_clip_coe"]
             )
-    
-    if with_reg:
-        # Regularization term
+
+    # Regularization term
+    diffvg_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
+    if (
+        torch.norm(coe_dict["delta_coe"]) > 0
+        or torch.norm(coe_dict["displacement_coe"]) > 0
+        or torch.norm(coe_dict["angle_coe"]) > 0
+    ):
         diffvg_regularization_loss = diffvg_regularization_term(
             shapes,
             shape_groups,
-            coe_delta=coe_delta,
-            coe_displacement=coe_displacement,
-            coe_angle=coe_angle,
+            coe_delta=coe_dict["delta_coe"],
+            coe_displacement=coe_dict["displacement_coe"],
+            coe_angle=coe_dict["angle_coe"],
         )
-        pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
-            shapes, shape_groups
-        )
-        image_regularization_loss = image_regularization_term(img, coe_image=coe_image)
-        loss = (
-            pos_clip_loss
-            + neg_clip_loss
-            + diffvg_regularization_loss
-            + pairwise_diffvg_regularization_loss
-            + image_regularization_loss
-        )
-    else:
-        # without regularization
-        loss = (
-            pos_clip_loss
-            + neg_clip_loss
-        )
-        
-    return loss
 
-def render_scene(name, shapes, shape_groups, canvas_width=224, canvas_height=224, gamma=1.0):
-    render = pydiffvg.RenderFunction.apply
+    pairwise_diffvg_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
+    if (
+        torch.norm(coe_dict["overlap_coe"]) > 0
+        or torch.norm(coe_dict["neighbor_coe"]) > 0
+    ):
+        pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
+            shapes,
+            shape_groups,
+            coe_overlap=coe_dict["overlap_coe"],
+            num_neighbor=coe_dict["neighbor_num"],
+            coe_neighbor=coe_dict["neighbor_coe"],
+        )
+
+    image_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
+    if torch.norm(coe_dict["image_coe"]) > 0:
+        image_regularization_loss = image_regularization_term(
+            image, coe_image=coe_dict["image_coe"]
+        )
+
+    joint_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
+    if torch.norm(coe_dict["joint_coe"]) > 0:
+        joint_regularization_loss = joint_regularization_term(
+            shapes, shape_groups, image, num_neighbor=1, coe_joint=coe_dict["joint_coe"]
+        )
+
+    loss = (
+        pos_clip_loss
+        + neg_clip_loss
+        + diffvg_regularization_loss
+        + pairwise_diffvg_regularization_loss
+        + image_regularization_loss
+        + joint_regularization_loss
+    )
+
+    if verbose:
+        print("pos_clip_loss:", pos_clip_loss.item())
+        print("neg_clip_loss:", neg_clip_loss.item())
+        print("diffvg_regularization_loss:", diffvg_regularization_loss.item())
+        print(
+            "pairwise_diffvg_regularization_loss:",
+            pairwise_diffvg_regularization_loss.item(),
+        )
+        print("image_regularization_loss:", image_regularization_loss.item())
+        print("joint_regularization_loss:", joint_regularization_loss.item())
+        print("loss:", loss.item())
+
+    return loss, pos_clip_loss
+
+
+# ----------------------- Post-processing -----------------------
+
+
+def delete_rect_iter(
+    canvas_width,
+    canvas_height,
+    render,
+    shapes,
+    shape_groups,
+    clip_model,
+    text_features,
+    coe_dict,
+    seed=0,
+):
+    # Early stop if the maximum margin is less than EPS
+    EPS = 1e-4
+
     scene_args = pydiffvg.RenderFunction.serialize_scene(
         canvas_width, canvas_height, shapes, shape_groups
     )
@@ -274,65 +329,128 @@ def render_scene(name, shapes, shape_groups, canvas_width=224, canvas_height=224
         canvas_height,  # height
         2,  # num_samples_x
         2,  # num_samples_y
-        99999,  # seed
+        seed + 1,  # seed
         None,  # background_image
         *scene_args
     )
-    pydiffvg.imwrite(
-        img.cpu(), "results/postprocess/output-{}.png".format(name), gamma=gamma
-    )
+    with torch.no_grad():
+        _, loss_before = cal_loss(
+            img,
+            shapes,
+            shape_groups,
+            clip_model,
+            text_features,
+            coe_dict,
+            use_aug=False,
+            augment_trans=None,
+            use_neg=False,
+            text_features_neg=None,
+            verbose=False,
+        )
 
-def rec2x(ori_shapes, ori_shape_groups):
-    render_scene("before", ori_shapes, ori_shape_groups)
-    origin_loss = calc_loss(ori_shapes, ori_shape_groups)
-    print("Origin loss = ", origin_loss)
+    loss_after = torch.zeros(1, device=pydiffvg.get_device())
+    idx_delete = -1
+    for idx, (rect, rect_group) in enumerate(zip(shapes, shape_groups)):
+        shapes.pop(idx)
+        shape_groups.pop(idx)
 
-    # render_scene("after", ori_shapes[:-1], ori_shape_groups[:-1])
-    # render_scene("after2", ori_shapes, ori_shape_groups)
-    # return
+        # Shift shape_ids
+        for i in range(idx, len(shapes)):
+            shape_groups[i].shape_ids -= 1
 
-    for (id, (rect, rect_group)) in enumerate(zip(ori_shapes, ori_shape_groups)):
-
+        scene_args = pydiffvg.RenderFunction.serialize_scene(
+            canvas_width, canvas_height, shapes, shape_groups
+        )
+        img = render(
+            canvas_width,  # width
+            canvas_height,  # height
+            2,  # num_samples_x
+            2,  # num_samples_y
+            seed + 1,  # seed
+            None,  # background_image
+            *scene_args
+        )
         with torch.no_grad():
-            ori_shapes[id].delta += torch.tensor([5, 5])
-            ori_shapes[id].update()
-        cur_loss = calc_loss(ori_shapes, ori_shape_groups)
-        print("cur loss = ", cur_loss)
-        if (cur_loss < origin_loss):
-            print("update")
-            # origin_loss = cur_loss
-        else:
-            with torch.no_grad():
-                ori_shapes[id].delta += torch.tensor([-5, -5])
-                ori_shapes[id].update()
-    render_scene("after", ori_shapes, ori_shape_groups)
+            _, loss_delete = cal_loss(
+                img,
+                shapes,
+                shape_groups,
+                clip_model,
+                text_features,
+                coe_dict,
+                use_aug=False,
+                augment_trans=None,
+                use_neg=False,
+                text_features_neg=None,
+                verbose=False,
+            )
 
-def recdel(ori_shapes, ori_shape_groups):
-    origin_loss = calc_loss(ori_shapes, ori_shape_groups)
-    print("Origin loss = ", origin_loss)
+        if loss_delete < min(loss_before - EPS, loss_after):
+            loss_after = loss_delete
+            idx_delete = idx
 
-    loss_contrib = []
+        # Recover original shapes and shape_groups
+        for i in range(idx, len(shapes)):
+            shape_groups[i].shape_ids += 1
+        shapes.insert(idx, rect)
+        shape_groups.insert(idx, rect_group)
 
-    for (id, (rect, rect_group)) in enumerate(zip(ori_shapes, ori_shape_groups)):
-        shapes = ori_shapes.copy()
-        shapes.remove(rect)
-        # print(shapes)
-        # print(type(shapes))
-        shape_groups = ori_shape_groups.copy()
-        shape_groups.remove(rect_group)
-        
-        for id_ in range(id, len(shapes)):
-            # print(shapes[id_].id)
-            # print(shape_groups[id_].id)
-            # print(type(shapes[id_].id))
-            # shapes[id_].id = str(int(shapes[id_].id)-1)
-            # print("shapes_groupsID: ", shape_groups[id_].shape_ids)
-            # print(torch.tensor([int(shape_groups[id_].shape_ids[0]) - 1]))
-            shape_groups[id_].shape_ids = torch.tensor([int(shape_groups[id_].shape_ids[0])-1])
+    if idx_delete != -1:
+        shapes.pop(idx_delete)
+        shape_groups.pop(idx_delete)
+        for i in range(idx_delete, len(shapes)):
+            shape_groups[i].shape_ids -= 1
 
-        print("calculating loss...")
-        cur_loss = calc_loss(shapes, shape_groups)
-        print("cur loss = ", cur_loss)
-        loss_contrib.append((id, - cur_loss + origin_loss))
+    return loss_before, loss_after
 
-    print(loss_contrib)
+
+def postprocess_delete_rect(
+    canvas_width,
+    canvas_height,
+    render,
+    shapes,
+    shape_groups,
+    clip_model,
+    text_features,
+    verbose=True,
+):
+    assert len(shapes) == len(shape_groups)
+    # We care only about pos_clip_loss when doing post-processing
+    coe_dict = {
+        "neg_clip_coe": 0.0,
+        "delta_coe": torch.tensor([0.0, 0.0], dtype=torch.float32),
+        "displacement_coe": torch.tensor([0.0, 0.0], dtype=torch.float32),
+        "angle_coe": torch.tensor(0.0, dtype=torch.float32),
+        "image_coe": torch.tensor(0.0, dtype=torch.float32),
+        "overlap_coe": torch.tensor(0.0, dtype=torch.float32),
+        "neighbor_num": 1,
+        "neighbor_coe": torch.tensor(0.0, dtype=torch.float32),
+        "joint_coe": torch.tensor(0.0, dtype=torch.float32),
+    }
+
+    t = 0
+    while len(shapes) > 0:
+        print("Post-process(delete) iteration:", t)
+        # The loss may not be strictly decreasing because the seed for rendering is not fixed
+        len_before = len(shapes)
+        loss_before, loss_after = delete_rect_iter(
+            canvas_width,
+            canvas_height,
+            render,
+            shapes,
+            shape_groups,
+            clip_model,
+            text_features,
+            coe_dict,
+            seed=t,
+        )
+        len_after = len(shapes)
+        if len_after == len_before:
+            print("No more rectangles to be deleted. Early stop.")
+            break
+        if verbose:
+            print("len_before:", len_before)
+            print("len_after:", len_after)
+            print("loss_before:", loss_before)
+            print("loss_after:", loss_after)
+        t += 1
