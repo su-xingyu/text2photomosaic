@@ -55,7 +55,7 @@ def retrieve_API(target_color, target_size, model, images, algorithm='plain'):
     return query_model(model, images, target_color, target_size, algorithm=algorithm)
 
 if __name__ == "__main__":
-    image_folder = '/content/images'
+    image_folder = './dataset_demo'
     algorithm = 'kdtree'
 
     images = load_images(image_folder)
