@@ -115,9 +115,19 @@ def read_tiles(shapes, rotation_groups):
     return tiles
 
 #==================== test function ====================
-import pickle
-import os
-def prepare_model(MODELPATH, IMAGEPATH):
+def prepare_model(MODELPATH, IMAGEPATH, algorithm='kdtree'):
+    """ return retrieve model and imageset, according to given paths
+
+    Args:
+        MODELPATH (str): path to retrieve model, if not exist, will train one
+        IMAGEPATH (str): path to image dataset
+        algorithm (str, optional): algorithm used by retriever. Defaults to 'kdtree'.
+
+    Returns:
+        (_type_, _type_): retrieve model, and corresponding imageset
+    """
+    import pickle
+    import os
     print("Start preparing model...")
     if os.path.exists(MODELPATH):
         print("Model already exists, loading...")
@@ -130,6 +140,16 @@ def prepare_model(MODELPATH, IMAGEPATH):
     return model, images
 
 def read(shapes_file, shape_groups_file):
+    """ return list of tiles, according to provided pkl files of shapes and shape_groups
+
+    Args:
+        shapes_file (str): path of shapes file (.pkl)
+        shape_groups_file (str): path of shape_groups file (.pkl)
+
+    Returns:
+        List[Tile]: information of given tiles, unpacked from shapes/shape_groups file
+    """
+    import pickle
     print("Start reading...")
     with open(shapes_file, "rb") as fp:   # Unpickling
         shapes = pickle.load(fp)
@@ -140,6 +160,18 @@ def read(shapes_file, shape_groups_file):
     return tiles
 
 def paint(tiles, model, images, canvas_size = (224, 224, 3), name = "result.png"):
+    """ replace tiles with retrieved images and save the generated photomosaic image
+
+    Args:
+        tiles (List[Tile]): list of tiles to replace
+        model (_type_): image retrieve model
+        images (_type_): image set for generateing photomosaic
+        canvas_size (tuple, optional): size of canvas. Defaults to (224, 224, 3).
+        name (str, optional): filename of generated image. Defaults to "result.png".
+
+    Returns:
+        tuple: generated photomosaic image
+    """
     canvas = np.zeros(canvas_size, dtype=np.uint8)
     for id, tile in enumerate(tiles):
         tile_shape = tile.shape.int().tolist()
