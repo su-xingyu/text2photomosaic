@@ -60,10 +60,12 @@ def replace_tile_image(canvas, image, tile, output_path="output/result.png"):
     for x in range(image.shape[0]):
         for y in range(image.shape[1]):
             try:
+                # cur_pos = (x + pos[0], y + pos[1])
                 cur_pos = (x + pos[1], y + pos[0])
                 canvas_sized_image[cur_pos] = image[x, y] 
                 mask[cur_pos] = 255
-                alpha[cur_pos] = min(1.0, tile.fill[3].item())
+                # alpha[cur_pos] = min(1.0, tile.fill[3].item())
+                alpha[cur_pos] = 1.0
             except:
                 pass
 
@@ -150,11 +152,14 @@ def paint(tiles, model, images, canvas_size = (224, 224, 3), name = "result.png"
         tile_img = cv2.resize(tile_img, (tile_shape))
         color_img = np.zeros((tile_img.shape[0], tile_img.shape[1], 3), dtype=np.uint8)
         color_img[:] = tile_color
-        tile_img[:] = 0.85 * tile_img + 0.15 * color_img
-
+        color_img.dtype = np.uint8
+        # tile_img[:] = 0.85 * tile_img + 0.15 * color_img
+        # cv2.imwrite("output/tile_{}.png".format(id), tile_img)
+        # cv2.imwrite("output/color_{}.png".format(id), color_img)
         print("COLOR: ", tile_color)
-        replace_tile_image(canvas, color_img, tile, output_path="output/" + name)
-        # replace_tile_image(canvas, tile_img, tile, output_path="output/" + name)
+        # replace_tile_image(canvas, color_img, tile, output_path="output/" + name)
+        replace_tile_image(canvas, tile_img, tile, output_path="output/" + name)
+        # input("Press Enter to continue...")
     return canvas
     
 def test_read():
