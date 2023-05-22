@@ -113,6 +113,15 @@ def read_tiles(shapes, rotation_groups):
 
 #==================== test function ====================
 import pickle
+def read(filename):
+    print("Start reading...", filename)
+    with open(filename, "rb") as fp:   # Unpickling
+        shapes = pickle.load(fp)
+    with open(filename, "rb") as fp:   # Unpickling
+        shape_groups = pickle.load(fp)
+
+    model = pickle.load(open("../retrieve/model.pkl", "rb"))
+    
 def test_read():
     print("TEST READ")
     read_id = 1

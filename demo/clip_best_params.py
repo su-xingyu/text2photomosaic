@@ -382,8 +382,8 @@ def recdel(ori_shapes, ori_shape_groups, num_del=3):
 
 
 # shapes, shape_groups = rec2x(shapes, shape_groups)
-shapes, shape_groups = recdel(shapes, shape_groups)
-quit()
+# shapes, shape_groups = recdel(shapes, shape_groups)
+# quit()
 
 for t in range(num_interations):
     print("Optimization iteration:", t)
@@ -457,6 +457,7 @@ postprocess_delete_rect(
     model,
     text_features,
     verbose=True,
+    iteration=5
 )
 
 
@@ -490,3 +491,5 @@ call(
     ]
 )
 
+pickle.dump(shapes, open("results/pkl/shapes.pkl", "wb"))
+pickle.dump(shape_groups, open("results/pkl/shape_groups.pkl", "wb"))
