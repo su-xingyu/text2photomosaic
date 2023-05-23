@@ -157,7 +157,7 @@ optimizer_color = torch.optim.Adam(
 print("Start training...")
 
 # Run Adam iterations.
-num_interations = 5
+num_interations = 100
 scheduler_delta = StepLR(optimizer_delta, step_size=num_interations // 3, gamma=0.5)
 scheduler_angle = StepLR(optimizer_angle, step_size=num_interations // 3, gamma=0.5)
 scheduler_translation = StepLR(
