@@ -413,7 +413,6 @@ def postprocess_delete_rect(
     clip_model,
     text_features,
     verbose=True,
-    iteration=-1
 ):
     assert len(shapes) == len(shape_groups)
     # We care only about pos_clip_loss when doing post-processing
@@ -431,8 +430,6 @@ def postprocess_delete_rect(
 
     t = 0
     while len(shapes) > 0:
-        if iteration != -1 and t >= iteration:
-            break
         print("Post-process(delete) iteration:", t)
         # The loss may not be strictly decreasing because the seed for rendering is not fixed
         len_before = len(shapes)
