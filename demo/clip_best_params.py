@@ -10,6 +10,11 @@ import os
 import pickle
 import gc
 
+# Process the arguments
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("--num_iter", help="iteration times of optimization", type=int, default=500)
+
 # Load the best parameters
 if os.path.exists("clip_best_params.pkl"):
     print("Loading best parameters...")
@@ -156,8 +161,10 @@ optimizer_color = torch.optim.Adam(
 
 print("Start training...")
 
+
 # Run Adam iterations.
-num_interations = 100
+num_interations = parser.parse_args().num_iter
+
 scheduler_delta = StepLR(optimizer_delta, step_size=num_interations // 3, gamma=0.5)
 scheduler_angle = StepLR(optimizer_angle, step_size=num_interations // 3, gamma=0.5)
 scheduler_translation = StepLR(
