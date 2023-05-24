@@ -180,8 +180,10 @@ def paint(tiles, model, images, canvas_size = (224, 224, 3), name = "result.png"
         tile_color = [tile_color[2], tile_color[1], tile_color[0]]
         tile_color = [max(0, min(x, 255)) for x in tile_color]
 
+        tile_color = [tile_color[2], tile_color[1], tile_color[0]]
         tile_img = np.asarray(retrieve_API(tile_color, tile_shape, model, images)) #, 'kdtree'))
         tile_img = cv2.resize(tile_img, (tile_shape))
+        tile_img = cv2.cvtColor(tile_img, cv2.COLOR_BGR2RGB)
         color_img = np.zeros((tile_img.shape[0], tile_img.shape[1], 3), dtype=np.uint8)
         color_img[:] = tile_color
         color_img.dtype = np.uint8
@@ -190,7 +192,7 @@ def paint(tiles, model, images, canvas_size = (224, 224, 3), name = "result.png"
         # cv2.imwrite("output/color_{}.png".format(id), color_img)
         print("COLOR: ", tile_color)
         # replace_tile_image(canvas, color_img, tile, output_path="output/" + name)
-        replace_tile_image(canvas, tile_img, tile, output_path="output/" + name)
+        replace_tile_image(canvas, tile_img, tile, output_path="results/photomosaic/" + name)
         # input("Press Enter to continue...")
     return canvas
     
