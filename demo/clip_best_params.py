@@ -2,7 +2,12 @@ from subprocess import call
 import pydiffvg
 import torch
 from my_shape import PolygonRect, RotationalShapeGroup
-from utils import cal_loss, postprocess_delete_rect
+from utils import (
+    cal_loss,
+    postprocess_delete_rect,
+    postprocess_scale_rect,
+    render_image,
+)
 import torchvision.transforms as transforms
 import clip
 from torch.optim.lr_scheduler import StepLR
@@ -58,10 +63,10 @@ else:
 
     overlap_coe = torch.tensor(1e-4, dtype=torch.float32)
 
-    neighbor_num = 1
-    neighbor_coe = torch.tensor(0.0, dtype=torch.float32)
+    neighbor_num = 2
+    neighbor_coe = torch.tensor(1e-4, dtype=torch.float32)
 
-    joint_coe = torch.tensor(1e-4, dtype=torch.float32)
+    joint_coe = torch.tensor(0.0, dtype=torch.float32)
 
 coe_dict = {
     "neg_clip_coe": neg_clip_coe,
@@ -128,18 +133,7 @@ for rect in shapes:
 for rect_group in shape_groups:
     rect_group.update()
 
-scene_args = pydiffvg.RenderFunction.serialize_scene(
-    canvas_width, canvas_height, shapes, shape_groups
-)
-img = render(
-    canvas_width,  # width
-    canvas_height,  # height
-    2,  # num_samples_x
-    2,  # num_samples_y
-    1,  # seed
-    None,  # background_image
-    *scene_args
-)
+img = render_image(canvas_width, canvas_height, shapes, shape_groups, render, seed=1)
 pydiffvg.imwrite(img.cpu(), "results/clip/init.png", gamma=gamma)
 
 optimizer_delta = torch.optim.Adam([rect.delta for rect in shapes], lr=delta_lr)
@@ -175,17 +169,8 @@ for t in range(num_interations):
     for rect_group in shape_groups:
         rect_group.update()
 
-    scene_args = pydiffvg.RenderFunction.serialize_scene(
-        canvas_width, canvas_height, shapes, shape_groups
-    )
-    img = render(
-        canvas_width,  # width
-        canvas_height,  # height
-        2,  # num_samples_x
-        2,  # num_samples_y
-        t + 1,  # seed
-        None,  # background_image
-        *scene_args
+    img = render_image(
+        canvas_width, canvas_height, shapes, shape_groups, render, seed=t + 1
     )
 
     # Save the intermediate render.
@@ -223,6 +208,12 @@ for t in range(num_interations):
     scheduler_angle.step()
     scheduler_translation.step()
 
+img = render_image(canvas_width, canvas_height, shapes, shape_groups, render, seed=102)
+pydiffvg.imwrite(img.cpu(), "results/clip/after_optimization.png", gamma=gamma)
+
+pickle.dump(shapes, open("results/clip/pkls/clip_shapes_no_pp.pkl", "wb"))
+pickle.dump(shape_groups, open("results/clip/pkls/clip_shape_groups_no_pp.pkl", "wb"))
+
 # We care only about pos_clip_loss when doing post-processing
 postprocess_delete_rect(
     canvas_width,
@@ -235,22 +226,33 @@ postprocess_delete_rect(
     verbose=True,
 )
 
+img = render_image(canvas_width, canvas_height, shapes, shape_groups, render, seed=102)
+pydiffvg.imwrite(img.cpu(), "results/clip/after_delete.png", gamma=gamma)
+
+postprocess_scale_rect(
+    canvas_width,
+    canvas_height,
+    render,
+    shapes,
+    shape_groups,
+    model,
+    text_features,
+    scale=1.2,
+    max_iter=100,
+    verbose=True,
+)
+
+img = render_image(canvas_width, canvas_height, shapes, shape_groups, render, seed=102)
+pydiffvg.imwrite(img.cpu(), "results/clip/after_scale.png", gamma=gamma)
+
 
 # Render the final result.
-scene_args = pydiffvg.RenderFunction.serialize_scene(
-    canvas_width, canvas_height, shapes, shape_groups
-)
-img = render(
-    canvas_width,  # width
-    canvas_height,  # height
-    2,  # num_samples_x
-    2,  # num_samples_y
-    102,  # seed
-    None,  # background_image
-    *scene_args
-)
+img = render_image(canvas_width, canvas_height, shapes, shape_groups, render, seed=102)
 # Save the images and differences.
 pydiffvg.imwrite(img.cpu(), "results/clip/final.png", gamma=gamma)
+
+pickle.dump(shapes, open("results/clip/pkls/clip_shapes.pkl", "wb"))
+pickle.dump(shape_groups, open("results/clip/pkls/clip_shape_groups.pkl", "wb"))
 
 # Convert the intermediate renderings to a video.
 call(
@@ -265,3 +267,4 @@ call(
         "results/clip/out.mp4",
     ]
 )
+

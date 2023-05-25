@@ -2,7 +2,11 @@ from subprocess import call
 import pydiffvg
 import torch
 from my_shape import PolygonRect, RotationalShapeGroup
-from utils import diffvg_regularization_term, pairwise_diffvg_regularization_term
+from utils import (
+    diffvg_regularization_term,
+    pairwise_diffvg_regularization_term,
+    render_image,
+)
 import optuna
 from torch.optim.lr_scheduler import StepLR
 import pickle
@@ -22,20 +26,20 @@ if os.path.exists("target_best_params.pkl"):
     tranlation_lr = best_params["tranlation_lr"]
     color_lr = best_params["color_lr"]
 
-    coe_delta = torch.tensor(
+    delta_coe = torch.tensor(
         [best_params["reg_delta_coe_x"], best_params["reg_delta_coe_y"]],
         dtype=torch.float32,
     )
-    coe_displacement = torch.tensor(
+    displacement_coe = torch.tensor(
         [best_params["reg_displacement_coe_x"], best_params["reg_displacement_coe_y"]],
         dtype=torch.float32,
     )
-    coe_angle = torch.tensor(best_params["angle_coe"], dtype=torch.float32)
+    angle_coe = torch.tensor(best_params["angle_coe"], dtype=torch.float32)
 
-    coe_overlap = torch.tensor(best_params["overlap_coe"], dtype=torch.float32)
+    overlap_coe = torch.tensor(best_params["overlap_coe"], dtype=torch.float32)
 
-    num_neighbor = best_params["neighbor_num"]
-    coe_neighbor = torch.tensor(best_params["neighbor_coe"], dtype=torch.float32)
+    neighbor_num = best_params["neighbor_num"]
+    neighbor_coe = torch.tensor(best_params["neighbor_coe"], dtype=torch.float32)
 else:
     print("No best parameters found, using default parameters...")
     delta_lr = 0.01
@@ -43,14 +47,14 @@ else:
     tranlation_lr = 0.01
     color_lr = 0.01
 
-    coe_delta = torch.tensor([1e-4, 1e-4], dtype=torch.float32)
-    coe_displacement = torch.tensor([1e-4, 1e-4], dtype=torch.float32)
-    coe_angle = torch.tensor(1e-4, dtype=torch.float32)
+    delta_coe = torch.tensor([1e-4, 1e-4], dtype=torch.float32)
+    displacement_coe = torch.tensor([1e-4, 1e-4], dtype=torch.float32)
+    angle_coe = torch.tensor(0.0, dtype=torch.float32)
 
-    coe_overlap = torch.tensor(0.0, dtype=torch.float32)
+    overlap_coe = torch.tensor(0.0, dtype=torch.float32)
 
-    num_neighbor = 1
-    coe_neighbor = torch.tensor(0.0, dtype=torch.float32)
+    neighbor_num = 1
+    neighbor_coe = torch.tensor(0.0, dtype=torch.float32)
 
 # Use GPU if available
 pydiffvg.set_use_gpu(torch.cuda.is_available())
@@ -92,18 +96,7 @@ for rect in shapes:
 for rect_group in shape_groups:
     rect_group.update()
 
-scene_args = pydiffvg.RenderFunction.serialize_scene(
-    canvas_width, canvas_height, shapes, shape_groups
-)
-img = render(
-    canvas_width,  # width
-    canvas_height,  # height
-    2,  # num_samples_x
-    2,  # num_samples_y
-    1,  # seed
-    None,  # background_image
-    *scene_args
-)
+img = render_image(canvas_width, canvas_height, shapes, shape_groups, render, seed=1)
 pydiffvg.imwrite(img.cpu(), "results/target/init.png", gamma=gamma)
 
 optimizer_delta = torch.optim.Adam([rect.delta for rect in shapes], lr=delta_lr)
@@ -139,17 +132,8 @@ for t in range(num_interations):
     for rect_group in shape_groups:
         rect_group.update()
 
-    scene_args = pydiffvg.RenderFunction.serialize_scene(
-        canvas_width, canvas_height, shapes, shape_groups
-    )
-    img = render(
-        canvas_width,  # width
-        canvas_height,  # height
-        2,  # num_samples_x
-        2,  # num_samples_y
-        t + 1,  # seed
-        None,  # background_image
-        *scene_args
+    img = render_image(
+        canvas_width, canvas_height, shapes, shape_groups, render, seed=t + 1
     )
 
     # Save the intermediate render.
@@ -169,16 +153,16 @@ for t in range(num_interations):
     diffvg_regularization_loss = diffvg_regularization_term(
         shapes,
         shape_groups,
-        coe_delta=coe_delta,
-        coe_displacement=coe_displacement,
-        coe_angle=coe_angle,
+        coe_delta=delta_coe,
+        coe_displacement=displacement_coe,
+        coe_angle=angle_coe,
     )
     pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
         shapes,
         shape_groups,
-        coe_overlap=coe_overlap,
-        num_neighbor=num_neighbor,
-        coe_neighbor=coe_neighbor,
+        coe_overlap=overlap_coe,
+        num_neighbor=neighbor_num,
+        coe_neighbor=neighbor_coe,
     )
     loss = pixel_loss + diffvg_regularization_loss + pairwise_diffvg_regularization_loss
 
@@ -206,20 +190,12 @@ for t in range(num_interations):
     scheduler_color.step()
 
 # Render the final result.
-scene_args = pydiffvg.RenderFunction.serialize_scene(
-    canvas_width, canvas_height, shapes, shape_groups
-)
-img = render(
-    canvas_width,  # width
-    canvas_height,  # height
-    2,  # num_samples_x
-    2,  # num_samples_y
-    102,  # seed
-    None,  # background_image
-    *scene_args
-)
+img = render_image(canvas_width, canvas_height, shapes, shape_groups, render, seed=102)
 # Save the images and differences.
 pydiffvg.imwrite(img.cpu(), "results/target/final.png", gamma=gamma)
+
+pickle.dump(shapes, open("results/target/pkls/target_shapes.pkl", "wb"))
+pickle.dump(shape_groups, open("results/target/pkls/target_shape_groups.pkl", "wb"))
 
 # Convert the intermediate renderings to a video.
 call(
