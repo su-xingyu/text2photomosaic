@@ -1,5 +1,5 @@
-demo/results/*.pkls
-demo/results/*.png
+demo/results/clip/*
+demo/results/target/*
 
 # Ignore the cache directory
 .metals/
