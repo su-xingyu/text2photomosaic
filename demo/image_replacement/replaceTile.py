@@ -5,10 +5,9 @@ import cv2
 import pydiffvg
 import torch
 
-sys.path.append("../demo/")
+sys.path.append("../mosaic_generation/")
 from my_shape import PolygonRect, RotationalShapeGroup
-sys.path.append("../retrieve/")
-from retriever import retrieve_API, load_images, train_model
+from retrieve.retriever import retrieve_API, load_images, train_model
 
 class Tile:
     """
@@ -128,6 +127,7 @@ def prepare_model(MODELPATH, IMAGEPATH, algorithm='kdtree'):
     """
     import pickle
     import os
+    images = load_images(IMAGEPATH)
     print("Start preparing model...")
     if os.path.exists(MODELPATH):
         print("Model already exists, loading...")
@@ -135,7 +135,6 @@ def prepare_model(MODELPATH, IMAGEPATH, algorithm='kdtree'):
     else:
         model = train_model(images, algorithm='kdtree')
 
-    images = load_images(IMAGEPATH)
     print("Done preparing model...")
     return model, images
 
@@ -192,7 +191,7 @@ def paint(tiles, model, images, canvas_size = (224, 224, 3), name = "result.png"
         # cv2.imwrite("output/color_{}.png".format(id), color_img)
         print("COLOR: ", tile_color)
         # replace_tile_image(canvas, color_img, tile, output_path="output/" + name)
-        replace_tile_image(canvas, tile_img, tile, output_path="results/photomosaic/" + name)
+        replace_tile_image(canvas, tile_img, tile, output_path="./" + name)
         # input("Press Enter to continue...")
     return canvas
     
