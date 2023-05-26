@@ -3,6 +3,8 @@ demo/*.pkls
 demo/*.png
 replace/*.png
 replace/output/
+demo/results/clip/*
+demo/results/target/*
 
 # Ignore the cache directory
 .metals/

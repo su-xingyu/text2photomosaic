@@ -1,13 +1,32 @@
-from subprocess import call
 import pydiffvg
 import torch
 from my_shape import PolygonRect, RotationalShapeGroup
-from utils import diffvg_regularization_term, pairwise_diffvg_regularization_term
+from utils import (
+    diffvg_regularization_term,
+    pairwise_diffvg_regularization_term,
+    render_image,
+)
 import optuna
 from torch.optim.lr_scheduler import StepLR
 import pickle
 import numpy as np
 from PIL import Image
+import os
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--target_image", help="path to target image", default="inputs/target.png"
+)
+args = parser.parse_args()
+
+RESULTS_PATH = "../results/target/"
+PKLS_PATH = os.path.join(RESULTS_PATH, "pkls")
+
+# Create folder for saving results
+if not os.path.exists(PKLS_PATH):
+    print("Creating folder for saving results...")
+    os.makedirs(PKLS_PATH)
 
 # Use GPU if available
 pydiffvg.set_use_gpu(torch.cuda.is_available())
@@ -16,7 +35,7 @@ gamma = 2.2
 render = pydiffvg.RenderFunction.apply
 
 # Load target image
-target = Image.open("target.png")
+target = Image.open(args.target_image)
 target = (torch.from_numpy(np.array(target)).float() / 255.0) ** gamma
 target = target[:, :, 3:4] * target[:, :, :3] + torch.ones(
     target.shape[0], target.shape[1], 3, device=pydiffvg.get_device()
@@ -35,7 +54,7 @@ def objective(trial):
 
     reg_delta_coe_x = trial.suggest_float("reg_delta_coe_x", 1e-6, 1.0, log=True)
     reg_delta_coe_y = trial.suggest_float("reg_delta_coe_y", 1e-6, 1.0, log=True)
-    coe_delta = torch.tensor([reg_delta_coe_x, reg_delta_coe_y], dtype=torch.float32)
+    delta_coe = torch.tensor([reg_delta_coe_x, reg_delta_coe_y], dtype=torch.float32)
 
     reg_displacement_coe_x = trial.suggest_float(
         "reg_displacement_coe_x", 1e-6, 1.0, log=True
@@ -43,17 +62,16 @@ def objective(trial):
     reg_displacement_coe_y = trial.suggest_float(
         "reg_displacement_coe_y", 1e-6, 1.0, log=True
     )
-    coe_displacement = torch.tensor(
+    displacement_coe = torch.tensor(
         [reg_displacement_coe_x, reg_displacement_coe_y], dtype=torch.float32
     )
 
-    angle_coe = trial.suggest_float("angle_coe", 1e-6, 1.0, log=True)
-    coe_angle = torch.tensor(angle_coe, dtype=torch.float32)
+    angle_coe = torch.tensor(trial.suggest_float("angle_coe", 1e-6, 1.0, log=True))
 
-    coe_overlap = trial.suggest_float("overlap_coe", 1e-6, 1.0, log=True)
-    
-    num_neighbor = trial.suggest_int("neighbor_num", 1, 8)
-    coe_neighbor = trial.suggest_float("neighbor_coe", 1e-6, 1.0, log=True)
+    overlap_coe = trial.suggest_float("overlap_coe", 1e-6, 1.0, log=True)
+
+    neighbor_num = trial.suggest_int("neighbor_num", 1, 8)
+    neighbor_coe = trial.suggest_float("neighbor_coe", 1e-6, 1.0, log=True)
 
     # Initializations
     shapes = []
@@ -110,17 +128,8 @@ def objective(trial):
         for rect_group in shape_groups:
             rect_group.update()
 
-        scene_args = pydiffvg.RenderFunction.serialize_scene(
-            canvas_width, canvas_height, shapes, shape_groups
-        )
-        img = render(
-            canvas_width,  # width
-            canvas_height,  # height
-            2,  # num_samples_x
-            2,  # num_samples_y
-            t + 1,  # seed
-            None,  # background_image
-            *scene_args
+        img = render_image(
+            canvas_width, canvas_height, shapes, shape_groups, render, seed=t + 1
         )
 
         # Pixel-wise loss.
@@ -134,16 +143,16 @@ def objective(trial):
         diffvg_regularization_loss = diffvg_regularization_term(
             shapes,
             shape_groups,
-            coe_delta=coe_delta,
-            coe_displacement=coe_displacement,
-            coe_angle=coe_angle,
+            coe_delta=delta_coe,
+            coe_displacement=displacement_coe,
+            coe_angle=angle_coe,
         )
         pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
             shapes,
             shape_groups,
-            coe_overlap=coe_overlap,
-            num_neighbor=num_neighbor,
-            coe_neighbor=coe_neighbor,
+            coe_overlap=overlap_coe,
+            num_neighbor=neighbor_num,
+            coe_neighbor=neighbor_coe,
         )
         loss = (
             pixel_loss
@@ -179,5 +188,5 @@ def objective(trial):
 
 study = optuna.create_study()
 study.optimize(objective, n_trials=2)
-with open("target_best_params.pkl", "wb") as f:
+with open(os.path.join(PKLS_PATH, "target_best_params.pkl"), "wb") as f:
     pickle.dump(study.best_params, f)
