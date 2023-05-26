@@ -1,8 +1,5 @@
-demo/results/
-demo/*.pkls
-demo/*.png
-replace/*.png
-replace/output/
+demo/results/*.pkls
+demo/results/*.png
 
 # Ignore the cache directory
 .metals/
