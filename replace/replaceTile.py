@@ -133,6 +133,7 @@ def prepare_model(MODELPATH, IMAGEPATH, algorithm='kdtree'):
         print("Model already exists, loading...")
         model = pickle.load(open(MODELPATH, "rb"))
     else:
+        images = load_images(IMAGEPATH)
         model = train_model(images, algorithm='kdtree')
 
     images = load_images(IMAGEPATH)
