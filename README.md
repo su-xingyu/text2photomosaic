@@ -1,5 +1,7 @@
 # Text2Photomosaic
 
+## TODO: Update according to new file structure
+
 ## Prepare the Environment
 Refer to the **Pre Installation** part of https://colab.research.google.com/github/kvfrans/clipdraw/blob/main/clipdraw.ipynb
 
