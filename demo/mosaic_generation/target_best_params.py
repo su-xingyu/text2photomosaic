@@ -5,6 +5,7 @@ from my_shape import PolygonRect, RotationalShapeGroup
 from utils import (
     diffvg_regularization_term,
     pairwise_diffvg_regularization_term,
+    joint_regularization_term,
     render_image,
 )
 from torch.optim.lr_scheduler import StepLR
@@ -16,7 +17,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--target_image", help="path to target image", default="inputs/target.png"
+    "--target_image", help="path to target image", default="inputs/target_exp1.png"
 )
 args = parser.parse_args()
 
@@ -56,6 +57,8 @@ if os.path.exists(os.path.join(PKLS_PATH, "target_best_params.pkl")):
 
     neighbor_num = best_params["neighbor_num"]
     neighbor_coe = torch.tensor(best_params["neighbor_coe"], dtype=torch.float32)
+
+    joint_coe = torch.tensor(best_params["joint_coe"], dtype=torch.float32)
 else:
     print("No best parameters found, using default parameters...")
     delta_lr = 0.01
@@ -64,13 +67,15 @@ else:
     color_lr = 0.01
 
     delta_coe = torch.tensor([1e-4, 1e-4], dtype=torch.float32)
-    displacement_coe = torch.tensor([1e-4, 1e-4], dtype=torch.float32)
+    displacement_coe = torch.tensor([1e-2, 1e-2], dtype=torch.float32)
     angle_coe = torch.tensor(0.0, dtype=torch.float32)
 
     overlap_coe = torch.tensor(0.0, dtype=torch.float32)
 
-    neighbor_num = 1
+    neighbor_num = 0
     neighbor_coe = torch.tensor(0.0, dtype=torch.float32)
+
+    joint_coe = torch.tensor(0.0, dtype=torch.float32)
 
 # Use GPU if available
 pydiffvg.set_use_gpu(torch.cuda.is_available())
@@ -167,22 +172,48 @@ for t in range(num_interations):
     img = img[:, :, :3]
     pixel_loss = torch.sum((img - target) ** 2) / (canvas_width * canvas_height)
 
+    img = img.unsqueeze(0)
+    img = img.permute(0, 3, 1, 2)  # NHWC -> NCHW
+
     # Regularization term
-    diffvg_regularization_loss = diffvg_regularization_term(
-        shapes,
-        shape_groups,
-        coe_delta=delta_coe,
-        coe_displacement=displacement_coe,
-        coe_angle=angle_coe,
+    diffvg_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
+    if (
+        torch.norm(delta_coe) > 0
+        or torch.norm(displacement_coe) > 0
+        or torch.norm(angle_coe) > 0
+    ):
+        diffvg_regularization_loss = diffvg_regularization_term(
+            shapes,
+            shape_groups,
+            coe_delta=delta_coe,
+            coe_displacement=displacement_coe,
+            coe_angle=angle_coe,
+        )
+    pairwise_diffvg_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
+    if torch.norm(overlap_coe) > 0 or torch.norm(neighbor_coe) > 0:
+        pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
+            shapes,
+            shape_groups,
+            coe_overlap=overlap_coe,
+            num_neighbor=neighbor_num,
+            coe_neighbor=neighbor_coe,
+        )
+    joint_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
+    if torch.norm(joint_coe) > 0:
+        joint_regularization_loss = joint_regularization_term(
+            shapes,
+            shape_groups,
+            img,
+            num_neighbor=1,
+            coe_joint=joint_coe,
+            threshold="max",
+        )
+    loss = (
+        pixel_loss
+        + diffvg_regularization_loss
+        + pairwise_diffvg_regularization_loss
+        + joint_regularization_loss
     )
-    pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
-        shapes,
-        shape_groups,
-        coe_overlap=overlap_coe,
-        num_neighbor=neighbor_num,
-        coe_neighbor=neighbor_coe,
-    )
-    loss = pixel_loss + diffvg_regularization_loss + pairwise_diffvg_regularization_loss
 
     print("pixel_loss:", pixel_loss.item())
     print("diffvg_regularization_loss:", diffvg_regularization_loss.item())
@@ -190,6 +221,7 @@ for t in range(num_interations):
         "pairwise_diffvg_regularization_loss:",
         pairwise_diffvg_regularization_loss.item(),
     )
+    print("joint_regularization_loss:", joint_regularization_loss.item())
     print("loss:", loss.item())
 
     # Backpropagate the gradients.

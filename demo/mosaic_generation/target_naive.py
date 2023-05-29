@@ -7,7 +7,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--target_image", help="path to target image", default="inputs/target.png"
+    "--target_image", help="path to target image", default="inputs/target_exp1.png"
 )
 args = parser.parse_args()
 
