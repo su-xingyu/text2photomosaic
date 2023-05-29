@@ -59,7 +59,6 @@ def replace_tile_image(canvas, image, tile, output_path="output/result.png"):
     for x in range(image.shape[0]):
         for y in range(image.shape[1]):
             try:
-                # cur_pos = (x + pos[0], y + pos[1])
                 cur_pos = (x + pos[1], y + pos[0])
                 canvas_sized_image[cur_pos] = image[x, y] 
                 mask[cur_pos] = 255
@@ -73,8 +72,6 @@ def replace_tile_image(canvas, image, tile, output_path="output/result.png"):
     mask = cv2.warpAffine(mask, mat, canvas_sized_image.shape[1::-1], flags=cv2.INTER_LINEAR)
     alpha = cv2.warpAffine(alpha , mat, canvas_sized_image.shape[1::-1], flags=cv2.INTER_LINEAR)
     
-    # cv2.imwrite("output/rotated_img.png", result)
-
     for x in range(result.shape[0]):
         for y in range(result.shape[1]):
             try:
@@ -84,12 +81,9 @@ def replace_tile_image(canvas, image, tile, output_path="output/result.png"):
                 pass
 
     print("WRITING")
-    # cv2.imwrite("output/result.png", canvas)
     cv2.imwrite(output_path, canvas)
     print("DONE")
     return canvas
-
-
 
 def read_tiles(shapes, rotation_groups):
     """
@@ -104,13 +98,11 @@ def read_tiles(shapes, rotation_groups):
         print("\tPOS: ", shape.upper_left)
         print("\tFILL: ", rotation_groups[id].fill_color)
         tiles.append(Tile( shape.size + shape.delta * shape.coe_delta, 
-                        #   shape.size * (shape.delta + torch.tensor([2, 2])) * torch.tensor([1, 2]),
                           shape.upper_left, 
                           degrees(rotation_groups[id].angle), 
                           rotation_groups[id].translation, rotation_groups[id].color,
                           rotation_groups[id].shape_to_canvas))
     
-    # input("Press Enter to continue...")
     return tiles
 
 #==================== test function ====================
@@ -158,7 +150,10 @@ def read(shapes_file, shape_groups_file):
     tiles = read_tiles(shapes, shape_groups)
     return tiles
 
-def paint(tiles, model, images, canvas_size = (224, 224, 3), name = "result.png"):
+def paint(tiles, model, images, 
+          canvas_size = (224, 224, 3), 
+          path = "../results/photomosaic/result.png", 
+          add_filter = False):
     """ replace tiles with retrieved images and save the generated photomosaic image
 
     Args:
@@ -186,13 +181,10 @@ def paint(tiles, model, images, canvas_size = (224, 224, 3), name = "result.png"
         color_img = np.zeros((tile_img.shape[0], tile_img.shape[1], 3), dtype=np.uint8)
         color_img[:] = tile_color
         color_img.dtype = np.uint8
-        # tile_img[:] = 0.85 * tile_img + 0.15 * color_img
-        # cv2.imwrite("output/tile_{}.png".format(id), tile_img)
-        # cv2.imwrite("output/color_{}.png".format(id), color_img)
+        if add_filter:
+            tile_img[:] = 0.85 * tile_img + 0.15 * color_img
         print("COLOR: ", tile_color)
-        # replace_tile_image(canvas, color_img, tile, output_path="output/" + name)
-        replace_tile_image(canvas, tile_img, tile, output_path="./" + name)
-        # input("Press Enter to continue...")
+        replace_tile_image(canvas, tile_img, tile, output_path=path)
     return canvas
     
 def test_read():
@@ -211,30 +203,19 @@ def test_read():
     canvas = np.zeros((224, 224, 3), dtype=np.uint8)
 
     for id, tile in enumerate(tiles):
-        # print("\nID: ", id)
-        # print("\tTILE_SHAPE_ORIGIN: ", tile.shape)
-        # print("\tPOS: ", tile.pos)
-        # print("\tROTATE: ", tile.rotate)
-        # print("\tFILL: ", tile.fill)
-
         tile_shape = tile.shape.int().tolist()
-        # tile.shape: (width, height)
 
         tile_color = tile.fill.double().tolist()[0:3]
         tile_color = [int(x * 255) for x in tile_color]
         tile_color = [tile_color[2], tile_color[1], tile_color[0]]
         tile_color = [max(0, min(x, 255)) for x in tile_color]
-        # print("COLOR:", tile_color)
 
         tile_img = np.asarray(retrieve_API(tile_color, tile_shape, model, images)) #, 'kdtree'))
         tile_img = cv2.resize(tile_img, (tile_shape))
-        # cv2.imwrite("output/tile_{}.png".format(id), tile_img)
 
         color_img = np.zeros((tile_img.shape[0], tile_img.shape[1], 3), dtype=np.uint8)
         color_img[:] = tile_color
         tile_img[:] = 0.85 * tile_img + 0.15 * color_img
-
-        # KKKK = input("PRESS ENTER TO CONTINUE")
 
         replace_tile_image(canvas, tile_img, tile)
 
