@@ -22,4 +22,4 @@ if __name__ == "__main__":
     outname = args.output
     if not (outname.endswith(".png") or outname.endswith(".jpg")):
         outname += ".png"
-    canvas = paint(tiles, model, images, canvas_size = (224, 224, 3), name = outname)
+    canvas = paint(tiles, model, images, canvas_size = (224, 224, 3), path = outname)
