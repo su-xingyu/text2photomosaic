@@ -148,7 +148,7 @@ def joint_regularization_term(
     # For each pixel, check whether it is cover by the closest rectangles
     width, height = image.shape[-2:]
     x_coords = torch.linspace(0, width - 1, width).repeat(height, 1)
-    y_coords = x_coords.t()
+    y_coords = torch.linspace(0, height - 1, height).repeat(width, 1).transpose(0, 1)
     coords = torch.stack((x_coords, y_coords), dim=0)
 
     centers_transformed = torch.stack(

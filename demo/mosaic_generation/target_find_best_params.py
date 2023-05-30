@@ -4,6 +4,7 @@ from my_shape import PolygonRect, RotationalShapeGroup
 from utils import (
     diffvg_regularization_term,
     pairwise_diffvg_regularization_term,
+    joint_regularization_term,
     render_image,
 )
 import optuna
@@ -16,7 +17,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--target_image", help="path to target image", default="inputs/target.png"
+    "--target_image", help="path to target image", default="inputs/target_exp1.png"
 )
 args = parser.parse_args()
 
@@ -72,6 +73,8 @@ def objective(trial):
 
     neighbor_num = trial.suggest_int("neighbor_num", 1, 8)
     neighbor_coe = trial.suggest_float("neighbor_coe", 1e-6, 1.0, log=True)
+
+    joint_coe = torch.tensor(trial.suggest_float("joint_coe", 1e-6, 1.0, log=True))
 
     # Initializations
     shapes = []
@@ -139,25 +142,49 @@ def objective(trial):
         img = img[:, :, :3]
         pixel_loss = torch.sum((img - target) ** 2) / (canvas_width * canvas_height)
 
+        img = img.unsqueeze(0)
+        img = img.permute(0, 3, 1, 2)  # NHWC -> NCHW
+
         # Regularization term
-        diffvg_regularization_loss = diffvg_regularization_term(
-            shapes,
-            shape_groups,
-            coe_delta=delta_coe,
-            coe_displacement=displacement_coe,
-            coe_angle=angle_coe,
+        diffvg_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
+        if (
+            torch.norm(delta_coe) > 0
+            or torch.norm(displacement_coe) > 0
+            or torch.norm(angle_coe) > 0
+        ):
+            diffvg_regularization_loss = diffvg_regularization_term(
+                shapes,
+                shape_groups,
+                coe_delta=delta_coe,
+                coe_displacement=displacement_coe,
+                coe_angle=angle_coe,
+            )
+        pairwise_diffvg_regularization_loss = torch.zeros(
+            1, device=pydiffvg.get_device()
         )
-        pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
-            shapes,
-            shape_groups,
-            coe_overlap=overlap_coe,
-            num_neighbor=neighbor_num,
-            coe_neighbor=neighbor_coe,
-        )
+        if torch.norm(overlap_coe) > 0 or torch.norm(neighbor_coe) > 0:
+            pairwise_diffvg_regularization_loss = pairwise_diffvg_regularization_term(
+                shapes,
+                shape_groups,
+                coe_overlap=overlap_coe,
+                num_neighbor=neighbor_num,
+                coe_neighbor=neighbor_coe,
+            )
+        joint_regularization_loss = torch.zeros(1, device=pydiffvg.get_device())
+        if torch.norm(joint_coe) > 0:
+            joint_regularization_loss = joint_regularization_term(
+                shapes,
+                shape_groups,
+                img,
+                num_neighbor=1,
+                coe_joint=joint_coe,
+                threshold="max",
+            )
         loss = (
             pixel_loss
             + diffvg_regularization_loss
             + pairwise_diffvg_regularization_loss
+            + joint_regularization_loss
         )
 
         print("pixel_loss:", pixel_loss.item())
