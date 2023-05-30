@@ -13,5 +13,6 @@ python demo/clip_best_params.py --num_iter=NUM_ITER
 ```
 To replace mosaic tiles with images
 ```
-python demo/demo_replace.py  # use --help to learn more about the arguments
+cd demo
+python demo_replace.py  # use --help to learn more about the arguments
 ```
