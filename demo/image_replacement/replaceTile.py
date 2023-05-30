@@ -4,6 +4,7 @@ import numpy as np
 import cv2
 import pydiffvg
 import torch
+import os
 
 sys.path.append("../mosaic_generation/")
 from my_shape import PolygonRect, RotationalShapeGroup
@@ -126,6 +127,8 @@ def prepare_model(MODELPATH, IMAGEPATH, algorithm='kdtree'):
         model = pickle.load(open(MODELPATH, "rb"))
     else:
         model = train_model(images, algorithm='kdtree')
+        with open('model.pkl', 'wb') as f:
+            pickle.dump(model, f)
 
     print("Done preparing model...")
     return model, images
