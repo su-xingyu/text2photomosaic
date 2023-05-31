@@ -67,7 +67,7 @@ else:
     color_lr = 0.01
 
     delta_coe = torch.tensor([1e-4, 1e-4], dtype=torch.float32)
-    displacement_coe = torch.tensor([1e-2, 1e-2], dtype=torch.float32)
+    displacement_coe = torch.tensor([1e-3, 1e-3], dtype=torch.float32)
     angle_coe = torch.tensor(0.0, dtype=torch.float32)
 
     overlap_coe = torch.tensor(0.0, dtype=torch.float32)

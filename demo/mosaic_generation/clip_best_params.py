@@ -80,10 +80,10 @@ else:
 
     overlap_coe = torch.tensor(1e-4, dtype=torch.float32)
 
-    neighbor_num = 1
-    neighbor_coe = torch.tensor(0.0, dtype=torch.float32)
+    neighbor_num = 4
+    neighbor_coe = torch.tensor(1e-4, dtype=torch.float32)
 
-    joint_coe = torch.tensor(1e-4, dtype=torch.float32)
+    joint_coe = torch.tensor(0.0, dtype=torch.float32)
 
 coe_dict = {
     "neg_clip_coe": neg_clip_coe,
