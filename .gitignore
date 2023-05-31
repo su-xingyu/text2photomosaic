@@ -1,5 +1,6 @@
 demo/results/clip/*
 demo/results/target/*
+demo/results/photomosaic/*
 
 # Ignore the cache directory
 .metals/
