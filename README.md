@@ -1,7 +1,10 @@
 # Text2Photomosaic
 
 ## Prepare the Environment
-Refer to the **Pre Installation** part of https://colab.research.google.com/github/kvfrans/clipdraw/blob/main/clipdraw.ipynb
+
+You will need to setup environment for both [Diffvg](https://github.com/BachiLi/diffvg) and [CLIP](https://github.com/openai/CLIP). Go to each project's repository for detailed instructions of environment setup.
+
+Or you can refer to the **Pre Installation** part of [CLIPDraw](https://colab.research.google.com/github/kvfrans/clipdraw/blob/main/clipdraw.ipynb), which should also work.
 
 ## Quick Start
 
@@ -21,7 +24,7 @@ Once the job above finishes, you will obtain `demo/results/clip/pkls/clip_shapes
 
 ```
 python demo/image_replacement/demo_replace.py \
-    --shapes "demo/results/clip/pkls/clip_shapes.pkl"
+    --shapes "demo/results/clip/pkls/clip_shapes.pkl" \
     --shape_groups `demo/results/clip/pkls/clip_shape_groups.pkl`
 ```
 
@@ -35,7 +38,7 @@ The workflow is similar to `text-to-photomosaic generation`. But you should run 
 python demo/target_best_params.py
 
 python demo/image_replacement/demo_replace.py \
-    --shapes "demo/results/target/pkls/target_shapes.pkl"
+    --shapes "demo/results/target/pkls/target_shapes.pkl" \
     --shape_groups `demo/results/target/pkls/target_shape_groups.pkl`
 ```
 
@@ -48,8 +51,8 @@ Prompt: "a red heart"
 Left: mosiac image, Right: photomosaic image
 
 <p float="left">
-  <img src="/demo/previous_results/clip/exp1/after_delete.png" width="200" />
-  <img src="/demo/previous_results/clip/exp1/photomosaic.png" width="200" />
+  <img src="/demo/results/previous_results/clip/exp1/after_delete.png" width="200" />
+  <img src="/demo/results/previous_results/clip/exp1/photomosaic.png" width="200" />
 </p>
 
 ### Target-to-photomosaic generation
@@ -58,5 +61,5 @@ Left: target image, Right: mosiac image
 
 <p float="left">
   <img src="/demo/mosaic_generation/inputs/target_exp1.png" width="200" />
-  <img src="/demo/previous_results/target/exp1/diffvg_0.07319.png" width="200" /> 
+  <img src="/demo/results/previous_results/target/exp1/diffvg_0.07319.png" width="200" /> 
 </p>
