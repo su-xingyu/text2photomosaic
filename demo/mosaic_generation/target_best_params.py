@@ -19,6 +19,25 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--target_image", help="path to target image", default="inputs/target_exp1.png"
 )
+parser.add_argument(
+    "--num_interations",
+    help="number of optimization iterations",
+    default=1000,
+    type=int,
+)
+parser.add_argument("--delta_coe_x", help="delta_coe_x", default=1e-4, type=float)
+parser.add_argument("--delta_coe_y", help="delta_coe_y", default=1e-4, type=float)
+parser.add_argument(
+    "--displacement_coe_x", help="displacement_coe_x", default=1e-3, type=float
+)
+parser.add_argument(
+    "--displacement_coe_y", help="displacement_coe_y", default=1e-3, type=float
+)
+parser.add_argument("--angle_coe", help="angle_coe", default=0.0, type=float)
+parser.add_argument("--overlap_coe", help="overlap_coe", default=0.0, type=float)
+parser.add_argument("--neighbor_num", help="neighbor_num", default=0, type=int)
+parser.add_argument("--neighbor_coe", help="neighbor_coe", default=0.0, type=float)
+parser.add_argument("--joint_coe", help="joint_coe", default=0.0, type=float)
 args = parser.parse_args()
 
 RESULTS_PATH = "../results/target/"
@@ -66,16 +85,18 @@ else:
     tranlation_lr = 0.01
     color_lr = 0.01
 
-    delta_coe = torch.tensor([1e-4, 1e-4], dtype=torch.float32)
-    displacement_coe = torch.tensor([1e-3, 1e-3], dtype=torch.float32)
-    angle_coe = torch.tensor(0.0, dtype=torch.float32)
+    delta_coe = torch.tensor([args.delta_coe_x, args.delta_coe_y], dtype=torch.float32)
+    displacement_coe = torch.tensor(
+        [args.displacement_coe_x, args.displacement_coe_y], dtype=torch.float32
+    )
+    angle_coe = torch.tensor(args.angle_coe, dtype=torch.float32)
 
-    overlap_coe = torch.tensor(0.0, dtype=torch.float32)
+    overlap_coe = torch.tensor(args.overlap_coe, dtype=torch.float32)
 
-    neighbor_num = 0
-    neighbor_coe = torch.tensor(0.0, dtype=torch.float32)
+    neighbor_num = args.neighbor_num
+    neighbor_coe = torch.tensor(args.neighbor_coe, dtype=torch.float32)
 
-    joint_coe = torch.tensor(0.0, dtype=torch.float32)
+    joint_coe = torch.tensor(args.joint_coe, dtype=torch.float32)
 
 # Use GPU if available
 pydiffvg.set_use_gpu(torch.cuda.is_available())
@@ -131,7 +152,7 @@ optimizer_color = torch.optim.Adam(
     [rect_group.color for rect_group in shape_groups], lr=color_lr
 )
 
-num_interations = 1000
+num_interations = args.num_interations
 scheduler_delta = StepLR(optimizer_delta, step_size=num_interations // 3, gamma=0.5)
 scheduler_angle = StepLR(optimizer_angle, step_size=num_interations // 3, gamma=0.5)
 scheduler_translation = StepLR(

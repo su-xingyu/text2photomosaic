@@ -14,3 +14,5 @@ reults
             ...
 
 ```
+
+Some of the folders listed above are not presented in the repo, but they will be automatically generated once you run corresponding scripts.

@@ -19,6 +19,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--target_image", help="path to target image", default="inputs/target_exp1.png"
 )
+parser.add_argument(
+    "--num_interations",
+    help="number of optimization iterations",
+    default=1000,
+    type=int,
+)
 args = parser.parse_args()
 
 RESULTS_PATH = "../results/target/"
@@ -109,7 +115,7 @@ def objective(trial):
         [rect_group.color for rect_group in shape_groups], lr=color_lr
     )
 
-    num_interations = 1000
+    num_interations = args.num_interations
     scheduler_delta = StepLR(optimizer_delta, step_size=num_interations // 3, gamma=0.5)
     scheduler_angle = StepLR(optimizer_angle, step_size=num_interations // 3, gamma=0.5)
     scheduler_translation = StepLR(
