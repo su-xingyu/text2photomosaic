@@ -32,8 +32,8 @@ python target_best_params.py \
     --target_image "inputs/target_exp2.png" \
     --delta_coe_x 1e-4 \
     --delta_coe_y 1e-4 \
-    --displacement_coe_x 1e-3 \
-    --displacement_coe_y 1e-3 \
+    --displacement_coe_x 1e-2 \
+    --displacement_coe_y 1e-2 \
     --angle_coe 0.0 \
     --overlap_coe 0.0 \
     --neighbor_num 0 \

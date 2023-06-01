@@ -1,18 +1,62 @@
 # Text2Photomosaic
 
-## TODO: Update according to new file structure
-
 ## Prepare the Environment
 Refer to the **Pre Installation** part of https://colab.research.google.com/github/kvfrans/clipdraw/blob/main/clipdraw.ipynb
 
-## Run Demo
-To generate the mosaic image, run following code
+## Quick Start
+
+**Note:** You can refer to each subfolder for more detailed instructions.
+
+### Text-to-photomosaic generation
+
+1. Run the following command
+
 ```
-python demo/clip_best_params.py   # defaultly run 500 iterations
-python demo/clip_best_params.py --num_iter=NUM_ITER
+python demo/clip_best_params.py
 ```
-To replace mosaic tiles with images
+
+This will generate mosaic image for a default prompt "a red heart". Result images will be stored at `demo/results/clip`
+
+Once the job above finishes, you will obtain `demo/results/clip/pkls/clip_shapes.pkl` and `demo/results/clip/pkls/clip_shape_groups.pkl`. Then run
+
 ```
-cd demo
-python demo_replace.py  # use --help to learn more about the arguments
+python demo/image_replacement/demo_replace.py \
+    --shapes "demo/results/clip/pkls/clip_shapes.pkl"
+    --shape_groups `demo/results/clip/pkls/clip_shape_groups.pkl`
 ```
+
+This will generate the corresponding photomosaic image, which will be stored at `demo/results/photomosaic`.
+
+### Target-to-photomosaic generation
+
+The workflow is similar to `text-to-photomosaic generation`. But you should run the following commands sequentially
+
+```
+python demo/target_best_params.py
+
+python demo/image_replacement/demo_replace.py \
+    --shapes "demo/results/target/pkls/target_shapes.pkl"
+    --shape_groups `demo/results/target/pkls/target_shape_groups.pkl`
+```
+
+## Results
+
+### Text-to-photomosaic generation
+
+Prompt: "a red heart"
+
+Left: mosiac image, Right: photomosaic image
+
+<p float="left">
+  <img src="/demo/previous_results/clip/exp1/after_delete.png" width="200" />
+  <img src="/demo/previous_results/clip/exp1/photomosaic.png" width="200" />
+</p>
+
+### Target-to-photomosaic generation
+
+Left: target image, Right: mosiac image
+
+<p float="left">
+  <img src="/demo/mosaic_generation/inputs/target_exp1.png" width="200" />
+  <img src="/demo/previous_results/target/exp1/diffvg_0.07319.png" width="200" /> 
+</p>
