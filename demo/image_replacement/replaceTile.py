@@ -61,7 +61,7 @@ def replace_tile_image(canvas, image, tile, output_path="../results/photomosaic/
         for y in range(image.shape[1]):
             try:
                 cur_pos = (x + pos[1], y + pos[0])
-                canvas_sized_image[cur_pos] = image[x, y] 
+                canvas_sized_image[cur_pos] = image[x, y]
                 mask[cur_pos] = 255
                 # alpha[cur_pos] = min(1.0, tile.fill[3].item())
                 alpha[cur_pos] = 1.0
@@ -77,7 +77,8 @@ def replace_tile_image(canvas, image, tile, output_path="../results/photomosaic/
         for y in range(result.shape[1]):
             try:
                 if mask[x, y] == 255:
-                    canvas[x, y] = (result[x, y] * alpha[x, y] + canvas[x, y] * (1 - alpha[x, y])).astype(np.uint8)
+                    canvas[x, y, :3] = (result[x, y] * alpha[x, y] + canvas[x, y, :3] * (1 - alpha[x, y])).astype(np.uint8)
+                    canvas[x, y, 3] = 255
             except:
                 pass
 
@@ -154,7 +155,7 @@ def read(shapes_file, shape_groups_file):
     return tiles
 
 def paint(tiles, model, images, 
-          canvas_size = (224, 224, 3), 
+          canvas_size = (224, 224, 4), 
           path = "../results/photomosaic/result.png", 
           add_filter = False):
     """ replace tiles with retrieved images and save the generated photomosaic image
@@ -240,5 +241,5 @@ if __name__ == "__main__":
     model, images = prepare_model("../retrieve/model.pkl", "../retrieve/dataset_demo")
     PATHPKL = "../demo/results/pkl/"
     tiles = read(PATHPKL + "shapes.pkl", PATHPKL + "shape_groups.pkl")
-    canvas = paint(tiles, model, images, canvas_size = (224, 224, 3), name = "result.png")
+    canvas = paint(tiles, model, images, canvas_size = (224, 224, 4), name = "result.png")
 

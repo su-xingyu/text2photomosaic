@@ -29,4 +29,4 @@ if __name__ == "__main__":
     if not os.path.exists(outputpath):
         os.makedirs(outputpath)
 
-    canvas = paint(tiles, model, images, canvas_size = (224, 224, 3), path = outputpath + outname)
+    canvas = paint(tiles, model, images, canvas_size = (224, 224, 4), path = outputpath + outname)

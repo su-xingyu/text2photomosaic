@@ -51,8 +51,8 @@ Prompt: "a red heart"
 Left: mosiac image, Right: photomosaic image
 
 <p float="left">
-  <img src="/demo/results/previous_results/clip/exp1/after_delete.png" width="200" />
-  <img src="/demo/results/previous_results/clip/exp1/photomosaic.png" width="200" />
+  <img src="/demo/results/previous_results/clip/exp1/after_delete.png" width="224" />
+  <img src="/demo/results/previous_results/clip/exp1/photomosaic.png" width="224" />
 </p>
 
 ### Target-to-photomosaic generation
@@ -60,6 +60,6 @@ Left: mosiac image, Right: photomosaic image
 Left: target image, Right: mosiac image
 
 <p float="left">
-  <img src="/demo/mosaic_generation/inputs/target_exp1.png" width="200" />
-  <img src="/demo/results/previous_results/target/exp1/diffvg_0.07319.png" width="200" /> 
+  <img src="/demo/mosaic_generation/inputs/target_exp1.png" width="224" />
+  <img src="/demo/results/previous_results/target/exp1/diffvg_0.07319.png" width="224" /> 
 </p>
