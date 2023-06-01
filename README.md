@@ -62,8 +62,8 @@ python demo/image_replacement/demo_replace.py \
 **Left:** a green tree in the desert, **Right:** a flower on a rock
 
 <p float="left">
-  <img src="/demo/results/previous_results/clip/exp2/after_delete.png" width="224" />
-  <img src="/demo/results/previous_results/clip/exp3/after_delete.png" width="224" />
+  <img src="/demo/results/previous_results/clip/exp2/after_optimization.png" width="224" />
+  <img src="/demo/results/previous_results/clip/exp3/after_optimization.png" width="224" />
 </p>
 
 ### Target-to-photomosaic generation
