@@ -1,5 +1,7 @@
 # Text2Photomosaic
 
+This is the course project for CS-413 Computational Photography @ EPFL.
+
 ## Prepare the Environment
 
 You will need to setup environment for both [Diffvg](https://github.com/BachiLi/diffvg) and [CLIP](https://github.com/openai/CLIP). Go to each project's repository for detailed instructions of environment setup.
@@ -46,18 +48,27 @@ python demo/image_replacement/demo_replace.py \
 
 ### Text-to-photomosaic generation
 
-Prompt: "a red heart"
+**Prompt:** "a red heart"
 
-Left: mosiac image, Right: photomosaic image
+**Left:** mosiac image, **Right:** photomosaic image
 
 <p float="left">
   <img src="/demo/results/previous_results/clip/exp1/after_delete.png" width="224" />
   <img src="/demo/results/previous_results/clip/exp1/photomosaic.png" width="224" />
 </p>
 
+**Other text-to-mosaic results**
+
+**Left:** a green tree in the desert, **Right:** a flower on a rock
+
+<p float="left">
+  <img src="/demo/results/previous_results/clip/exp2/after_delete.png" width="224" />
+  <img src="/demo/results/previous_results/clip/exp3/after_delete.png" width="224" />
+</p>
+
 ### Target-to-photomosaic generation
 
-Left: target image, Right: mosiac image
+**Left:** target image, **Right:** mosiac image
 
 <p float="left">
   <img src="/demo/mosaic_generation/inputs/target_exp1.png" width="224" />

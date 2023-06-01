@@ -13,6 +13,35 @@ python clip_best_params.py \
     --neighbor_coe 0.0 \
     --joint_coe 1e-4
 
+# clip experiment 2
+python clip_best_params.py \
+    --prompt "a green tree in the desert" \
+    --neg_clip_coe 0.3 \
+    --delta_coe_x 1e-4 \
+    --delta_coe_y 1e-4 \
+    --displacement_coe_x 0.0 \
+    --displacement_coe_y 0.0 \
+    --angle_coe 0.0 \
+    --image_coe 0.0 \
+    --overlap_coe 0.0 \
+    --neighbor_num 0 \
+    --neighbor_coe 0.0 \
+    --joint_coe 1e-4
+
+# clip experiment 3
+python clip_best_params.py \
+    --prompt "a flower on a rock" \
+    --neg_clip_coe 0.3 \
+    --delta_coe_x 1e-4 \
+    --delta_coe_y 1e-4 \
+    --displacement_coe_x 0.0 \
+    --displacement_coe_y 0.0 \
+    --angle_coe 0.0 \
+    --image_coe 0.0 \
+    --overlap_coe 0.0 \
+    --neighbor_num 0 \
+    --neighbor_coe 0.0 \
+    --joint_coe 1e-4
 
 # target experiment 1
 python target_best_params.py \

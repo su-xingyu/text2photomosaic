@@ -276,6 +276,9 @@ postprocess_delete_rect(
 img = render_image(canvas_width, canvas_height, shapes, shape_groups, render, seed=102)
 pydiffvg.imwrite(img.cpu(), os.path.join(RESULTS_PATH, "after_delete.png"), gamma=gamma)
 
+pickle.dump(shapes, open(os.path.join(PKLS_PATH, "clip_shapes_no_scaling.pkl"), "wb"))
+pickle.dump(shape_groups, open(os.path.join(PKLS_PATH, "clip_shape_groups_no_scaling.pkl"), "wb"))
+
 postprocess_scale_rect(
     canvas_width,
     canvas_height,
