@@ -3,6 +3,14 @@ import torch
 
 
 class PolygonRect(pydiffvg.Polygon):
+    """ A rectangle defined by its upper left corner, width and height.
+    Vars:
+        self.upper_left: upper left corner of the rectangle
+        self.size: width and height of the rectangle
+        self.raw_points: the four vertices of the rectangle
+        self.delta: the change in width and height
+        self.coe_delta: the changing rate of delta
+    """
     def __init__(
         self,
         upper_left,
@@ -28,6 +36,8 @@ class PolygonRect(pydiffvg.Polygon):
         super().__init__(self.raw_points, True, stroke_width, id)
 
     def update(self):
+        """ Update the rectangle by adding delta to the width and height.
+        """
         stacked_delta = torch.stack(
             [
                 torch.tensor(0.0),
@@ -44,6 +54,15 @@ class PolygonRect(pydiffvg.Polygon):
 
 
 class RotationalShapeGroup(pydiffvg.ShapeGroup):
+    """ A shape group that can be rotated and translated.
+    Vars:
+        self.angle: the angle of rotation
+        self.translation: the translation vector
+        self.coe_ang: the changing rate of angle
+        self.coe_trans: the changing rate of translation
+        self.color: the color of the shape group
+        self._tranparent: whether the shape group is transparent
+    """
     def __init__(
         self,
         shape_ids,
@@ -71,6 +90,9 @@ class RotationalShapeGroup(pydiffvg.ShapeGroup):
         )
 
     def update(self):
+        """ Update the shape group by rotating and translating it.
+        Also update the color of the shape group.
+        """
         angle = self.coe_ang * self.angle
         translation = self.coe_trans * self.translation
         rotation_m = torch.stack(

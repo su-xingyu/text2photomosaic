@@ -154,6 +154,7 @@ augment_trans = transforms.Compose(
     ]
 )
 
+# Initialize scene as uniform grids
 shapes = []
 shape_groups = []
 for x in range(0, 224, 16):
@@ -222,6 +223,7 @@ for t in range(num_interations):
             gamma=gamma,
         )
 
+    # Calculate the loss
     loss, _ = cal_loss(
         img,
         shapes,
@@ -262,6 +264,7 @@ pickle.dump(
 )
 
 # We care only about pos_clip_loss when doing post-processing
+# Deletion post-processing
 postprocess_delete_rect(
     canvas_width,
     canvas_height,
@@ -279,6 +282,7 @@ pydiffvg.imwrite(img.cpu(), os.path.join(RESULTS_PATH, "after_delete.png"), gamm
 pickle.dump(shapes, open(os.path.join(PKLS_PATH, "clip_shapes_no_scaling.pkl"), "wb"))
 pickle.dump(shape_groups, open(os.path.join(PKLS_PATH, "clip_shape_groups_no_scaling.pkl"), "wb"))
 
+# Scaling post-processing
 postprocess_scale_rect(
     canvas_width,
     canvas_height,

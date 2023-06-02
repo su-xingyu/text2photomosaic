@@ -16,6 +16,14 @@ def diffvg_regularization_term(
     coe_displacement=torch.tensor([1.0, 1.0]),
     coe_angle=torch.tensor(1.0),
 ):
+    """ Delta regularization term + displacement regularization term + rotation regularization term
+    Args:
+        shapes: a list of shapes
+        shape_groups: a list of shape groups
+        coe_delta: the coefficient of delta regularization term
+        coe_displacement: the coefficient of displacement regularization term
+        coe_angle: the coefficient of rotation regularization term
+    """
     regularization_term = 0
     for shape, shape_group in zip(shapes, shape_groups):
         # Delta regularization term
@@ -47,6 +55,16 @@ def pairwise_diffvg_regularization_term(
     coe_neighbor=torch.tensor(1.0),
     threshold="mean",
 ):
+    """ Overlap regularization term + neighbor regularization term
+    Args:
+        shapes: a list of shapes
+        shape_groups: a list of shape groups
+        coe_overlap: the coefficient of overlap regularization term
+        num_neighbor: the number of neighbors to consider
+        coe_neighbor: the coefficient of neighbor regularization term
+        threshold: how the threshold to determine whether two shapes are neighbors is calculated,
+            can be "mean", "max", or "diagonal"
+    """
     centers_transformed = torch.stack(
         [
             torch.matmul(
@@ -123,6 +141,11 @@ def pairwise_diffvg_regularization_term(
 
 
 def image_regularization_term(image, coe_image=torch.tensor(1.0)):
+    """ Image regularization term
+    Args:
+        image: input image
+        coe_image: the coefficient of image regularization term
+    """
     gray_image = transforms.functional.rgb_to_grayscale(image)
     sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32)
     sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32)
@@ -145,6 +168,16 @@ def joint_regularization_term(
     coe_joint=torch.tensor(1.0),
     threshold="mean",
 ):
+    """Pixel neighborhood regularization term
+    Args:
+        shapes: a list of shapes
+        shape_groups: a list of shape groups
+        image: input image
+        num_neighbor: the number of neighbors to consider
+        coe_joint: the coefficient of pixel neighborhood regularization term
+        threshold: how the threshold to determine whether two shapes are neighbors is calculated,
+            can be "mean", "max", or "diagonal"
+    """
     # For each pixel, check whether it is cover by the closest rectangles
     width, height = image.shape[-2:]
     x_coords = torch.linspace(0, width - 1, width).repeat(height, 1)
@@ -210,6 +243,20 @@ def cal_loss(
     text_features_neg=None,
     verbose=True,
 ):
+    """ Calculate the loss for text-to-mosaic generation
+    Args:
+        image: input image
+        shapes: a list of shapes
+        shape_groups: a list of shape groups
+        clip_model: CLIP model
+        text_features: text features
+        coe_dict: a dictionary of coefficients
+        use_aug: whether to use augmentation
+        augment_trans: augmentation transformation
+        use_neg: whether to use negative text features
+        text_features_neg: negative text features
+        verbose: whether to print the loss
+    """
     # Transform image for CLIP input
     image = image[:, :, 3:4] * image[:, :, :3] + torch.ones(
         image.shape[0], image.shape[1], 3, device=pydiffvg.get_device()
@@ -325,6 +372,18 @@ def delete_rect_iter(
     coe_dict,
     seed=0,
 ):
+    """ Single iteration of deleting a rectangle
+    Args:
+        canvas_width: canvas width
+        canvas_height: canvas height
+        render: render function
+        shapes: list of shapes
+        shape_groups: list of shape groups
+        clip_model: CLIP model
+        text_features: text features
+        coe_dict: coefficient dictionary
+        seed: random seed
+    """
     # Early stop if the maximum margin is less than EPS
     EPS = 2e-4
 
@@ -402,6 +461,18 @@ def postprocess_delete_rect(
     max_iter=sys.maxsize,
     verbose=True,
 ):
+    """ Post-processing by deleting rectangles
+    Args:
+        canvas_width: canvas width
+        canvas_height: canvas height
+        render: render function
+        shapes: list of shapes
+        shape_groups: list of shape groups
+        clip_model: CLIP model
+        text_features: text features
+        max_iter: maximum number of iterations
+        verbose: whether to print loss
+    """
     assert len(shapes) == len(shape_groups)
     # We care only about pos_clip_loss when doing post-processing
     coe_dict = {
